@@ -441,6 +441,7 @@ configure_tor() {
     cat > $HOME/.tor/torrc << EOL
 SocksPort 49050
 ControlPort 49051
+CookieAuthentication 1
 HiddenServiceDir /data/data/com.termux/files/home/.tor/ZeroNet
 HiddenServicePort 8008 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
@@ -448,7 +449,6 @@ Log notice file /data/data/com.termux/files/usr/var/log/tor/notices.log
 EOL
     echo "Tor configuration created at $HOME/.tor/torrc"
 }
-
 echo "Setting up Tor..."
 configure_tor
 
@@ -626,23 +626,7 @@ EOL
 # First, create the initial ZeroNet configuration to get a random port
 create_zeronet_conf
 
-configure_tor() {
-    echo "Configuring Tor..."
-    mkdir -p $HOME/.tor
-    mkdir -p /data/data/com.termux/files/usr/var/log/tor
-    mkdir -p /data/data/com.termux/files/home/.tor/ZeroNet
-
-    cat > $HOME/.tor/torrc << EOL
-SocksPort 49050
-ControlPort 49051
-HiddenServiceDir /data/data/com.termux/files/home/.tor/ZeroNet
-HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
-HiddenServiceVersion 3
-Log notice file /data/data/com.termux/files/usr/var/log/tor/notices.log
-EOL
-    echo "Tor configuration created at $HOME/.tor/torrc"
-}
-
+# Now configure and start Tor
 echo "Setting up Tor..."
 configure_tor
 
@@ -658,17 +642,6 @@ if kill -0 $TOR_PID 2>/dev/null; then
     echo "Tor process is still running after 60 seconds. Proceeding with hidden service setup."
 else
     echo "Tor process is not running. There may have been an issue starting Tor."
-    exit 1
-fi
-
-echo "Retrieving onion address..."
-if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
-    ONION_ADDRESS=$(cat /data/data/com.termux/files/home/.tor/ZeroNet/hostname)
-    echo "Onion address: $ONION_ADDRESS"
-else
-    echo "Failed to retrieve onion address. Tor hidden service may not have been created properly."
-    echo "Contents of the hidden service directory:"
-    ls -la /data/data/com.termux/files/home/.tor/ZeroNet
     echo "Last 20 lines of Tor log:"
     tail -n 20 /data/data/com.termux/files/usr/var/log/tor/notices.log
     exit 1
