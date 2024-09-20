@@ -325,7 +325,6 @@ debug = False
 tor = always
 fileserver_ip_type = ipv4
 use_openssl = True
-ip_local = 127.0.0.1
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
