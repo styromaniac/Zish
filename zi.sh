@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+termux-wakelock
+
 set -e
 
 ZERONET_DIR="$HOME/apps/zeronet"
