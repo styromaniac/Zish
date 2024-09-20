@@ -310,7 +310,7 @@ update_trackers() {
 
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-    
+
     cat > "$conf_file" << EOL
 [global]
 ui_ip = 127.0.0.1
