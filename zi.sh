@@ -210,7 +210,7 @@ pip_operation_with_retries() {
 }
 
 pip install --upgrade pip setuptools wheel || { log_error "Failed to upgrade pip, setuptools, and wheel"; exit 1; }
-pip install pyopenssl gevent pycryptodome || { log_error "Failed to install gevent and pycryptodome"; exit 1; }
+pip install gevent pycryptodome || { log_error "Failed to install gevent and pycryptodome"; exit 1; }
 
 export LIBRARY_PATH=$PREFIX/lib
 export C_INCLUDE_PATH=$PREFIX/include
@@ -329,13 +329,18 @@ EOL
 get_zeronet_port() {
     log "Starting ZeroNet briefly to generate config..."
     cd $ZERONET_DIR && . ./venv/bin/activate
-    python zeronet.py --silent & 
+    python zeronet.py --config_file $ZERONET_DIR/zeronet.conf > zeronet_output.log 2>&1 &
     TEMP_ZERONET_PID=$!
     sleep 10
     kill $TEMP_ZERONET_PID
 
     FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
+    if [ -z "$FILESERVER_PORT" ]; then
+        log_error "Failed to determine ZeroNet's file server port"
+        exit 1
+    fi
     log "ZeroNet chose port: $FILESERVER_PORT"
+    rm zeronet_output.log
 }
 
 configure_tor() {
