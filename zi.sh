@@ -325,7 +325,6 @@ trackers_proxy = tor
 proxy = tor
 fileserver_ip_type = ipv4
 use_openssl = True
-disable_udp = True
 disable_encryption = False
 homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
 version_check = False
