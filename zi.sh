@@ -15,6 +15,10 @@ log_error() {
     exit 1
 }
 
+termux-wake-lock
+
+termux-change-repo
+
 #========== SECTION: INSTALL PACKAGES ==========
 install_packages() {
     log "Starting package installation..."
@@ -54,7 +58,6 @@ setup_zeronet() {
 
     mkdir -p "$ZERONET_DIR"
 
-    # Prompt for ZeroNet source
     echo "Please provide the Git clone URL or path to the ZeroNet ZIP file (Git URL, .zip, or .tar.gz):"
     read -r zeronet_source
 
@@ -126,7 +129,6 @@ setup_zeronet() {
     cd "$ZERONET_DIR"
     pip install -r requirements.txt || log_error "Failed to install ZeroNet requirements"
 
-    # Prompt for users.json
     echo "Please provide URL, path to users.json, or press Enter to skip:"
     read -r users_json_source
 
