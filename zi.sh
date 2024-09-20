@@ -321,9 +321,7 @@ tor_controller = 127.0.0.1:49051
 tor_proxy = 127.0.0.1:49050
 trackers_file = $ZERONET_DIR/data/trackers.json
 language = en
-debug = False
 tor = always
-use_openssl = true
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
