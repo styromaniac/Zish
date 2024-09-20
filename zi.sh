@@ -2,7 +2,7 @@
 
 set -e
 
-REPO_URL="https://raw.githubusercontent.com/styromaniac/Zish/main"
+REPO_URL="https://raw.githubusercontent.com/styromaniac/Zish/refs/heads/main"
 LOG_FILE="$HOME/zeronet_install.log"
 
 log() {
