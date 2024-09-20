@@ -731,6 +731,33 @@ view_log() {
     fi
 }
 
+# Start ZeroNet briefly to generate config
+cd $ZERONET_DIR && . ./venv/bin/activate
+python zeronet.py --silent & 
+TEMP_ZERONET_PID=$!; sleep 10; kill $TEMP_ZERONET_PID
+
+# Read ZeroNet port
+FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
+echo "ZeroNet port: $FILESERVER_PORT"
+
+# Configure and start Tor
+cat > $HOME/.tor/torrc << EOL
+SocksPort 49050
+ControlPort 49051
+CookieAuthentication 1
+HiddenServiceDir /data/data/com.termux/files/home/.tor/ZeroNet
+HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
+HiddenServiceVersion 3
+Log notice file /data/data/com.termux/files/usr/var/log/tor/notices.log
+EOL
+
+tor -f $HOME/.tor/torrc &
+TOR_PID=$!; sleep 60
+
+# Update ZeroNet config with onion address
+ONION_ADDRESS=$(cat /data/data/com.termux/files/home/.tor/ZeroNet/hostname)
+sed -i "s/^ip_external = .*/ip_external = ${ONION_ADDRESS}/" "$ZERONET_DIR/zeronet.conf"
+
 restart_zeronet() {
     termux-dialog confirm -i "Are you sure you want to restart ZeroNet?" -t "Restart ZeroNet"
     if [ $? -eq 0 ]; then
