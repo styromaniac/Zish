@@ -53,26 +53,6 @@ required_packages=(
     clang make termux-api tor
 )
 
-pkg_operation_with_retries() {
-    local operation=$1
-    shift
-    local max_attempts=3
-    local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if pkg "$operation" "$@"; then
-            return 0
-        else
-            log "pkg $operation failed. Attempt $attempt of $max_attempts."
-            if [ $attempt -lt $max_attempts ]; then
-                log "Retrying in 5 seconds..."
-                sleep 5
-            fi
-            ((attempt++))
-        fi
-    done
-    return 1
-}
-
 install_package() {
     local package=$1
     local max_attempts=3
@@ -240,75 +220,25 @@ export LIBSECP256K1_STATIC=1
 pip uninstall -y coincurve
 pip cache purge
 
-pkg_operation_with_retries install autoconf automake libtool
-
 cd ~
 git_clone_with_retries https://github.com/bitcoin-core/secp256k1.git libsecp256k1
 cd libsecp256k1
-
-# Get the default branch name
-default_branch=$(git symbolic-ref --short HEAD)
-log "Default branch is $default_branch"
-
-# Fetch all tags
-git fetch --tags
-
-# Try to get the latest tag
-latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1))
-
-if [ ! -z "$latest_tag" ]; then
-    log "Latest tag is $latest_tag"
-    if git checkout $latest_tag; then
-        log "Successfully checked out tag $latest_tag"
-    else
-        log "Failed to checkout tag $latest_tag. Using default branch $default_branch."
-    fi
-else
-    log "No tags found. Using default branch $default_branch."
-fi
-
-# Ensure we're on a valid commit
-if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
-    log "HEAD is not a valid commit. Checking out $default_branch."
-    git checkout $default_branch
-fi
 
 ./autogen.sh
 ./configure --prefix=$PREFIX --enable-module-recovery --enable-experimental --enable-module-ecdh
 make
 make install
 
-install_coincurve() {
-    local max_attempts=3
-    local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        log "Attempting to install coincurve (attempt $attempt of $max_attempts)..."
-        if CFLAGS="-I$PREFIX/include" LDFLAGS="-L$PREFIX/lib -lpython3.11 -lsecp256k1" pip install --no-cache-dir --no-binary :all: coincurve; then
-            log "coincurve installed successfully"
-            return 0
-        else
-            log "Failed to install coincurve. Retrying in 5 seconds..."
-            pip uninstall -y coincurve
-            pip cache purge
-            sleep 5
-            ((attempt++))
-        fi
-    done
-    log_error "Failed to install coincurve after $max_attempts attempts."
-    return 1
-}
+cd "$ZERONET_DIR"
 
-if ! install_coincurve; then
-    log "WARNING: coincurve installation failed. Some ZeroNet features may not work correctly."
-fi
+CFLAGS="-I$PREFIX/include" LDFLAGS="-L$PREFIX/lib -lpython3.11 -lsecp256k1" pip install --no-cache-dir --no-binary :all: coincurve
 
-if python -c "from coincurve import PrivateKey; key = PrivateKey(); print(key.public_key.format())" > /dev/null 2>&1; then
-    log "coincurve installed successfully"
-else
-    log "Failed to install coincurve"
+if ! python -c "from coincurve import PrivateKey; key = PrivateKey(); print(key.public_key.format())" > /dev/null 2>&1; then
+    log_error "Failed to install coincurve"
     exit 1
 fi
 
+log "coincurve installed successfully"
 python -c "import pkg_resources; print(f'coincurve version: {pkg_resources.get_distribution(\"coincurve\").version}')"
 
 cd ~
@@ -351,37 +281,6 @@ chmod -R u+rwX ./data
 
 mkdir -p /data/data/com.termux/files/usr/var/log/
 
-edit_file() {
-    local file_path="$1"
-    if [ ! -f "$file_path" ]; then
-        log "File not found: $file_path"
-        return 1
-    fi
-
-    termux-open "$file_path"
-
-    log "File opened in external editor. Press Enter when you're done editing."
-    read -r
-}
-
-edit_zeronet_file() {
-    log "Select a file to edit:"
-    log "1) content.json"
-    log "2) index.html"
-    log "3) Other file (specify path)"
-    read -p "Enter your choice: " choice
-
-    case $choice in
-        1) edit_file "$ZERONET_DIR/data/1HeLLo4uzjaLetFx6NH3PMwFP3qbRbTf3D/content.json" ;;
-        2) edit_file "$ZERONET_DIR/data/1HeLLo4uzjaLetFx6NH3PMwFP3qbRbTf3D/index.html" ;;
-        3) 
-            read -p "Enter the relative path of the file: " rel_path
-            edit_file "$ZERONET_DIR/data/$rel_path"
-            ;;
-        *) log "Invalid choice" ;;
-    esac
-}
-
 update_trackers() {
     log "Updating trackers list..."
     TRACKERS_FILE="$ZERONET_DIR/data/trackers.json"
@@ -409,6 +308,49 @@ update_trackers() {
     sleep 5
 }
 
+create_zeronet_conf() {
+    local conf_file="$ZERONET_DIR/zeronet.conf"
+    
+    cat > "$conf_file" << EOL
+[global]
+ui_ip = 127.0.0.1
+ui_port = 43110
+data_dir = $ZERONET_DIR/data
+log_dir = /data/data/com.termux/files/usr/var/log/zeronet
+tor_controller = 127.0.0.1:49051
+tor_proxy = 127.0.0.1:49050
+tor_use_bridge = False
+trackers_file = $ZERONET_DIR/data/trackers.json
+trackers_proxy = tor
+proxy = tor
+fileserver_ip_type = ipv4
+use_openssl = True
+disable_udp = True
+disable_encryption = False
+homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
+version_check = False
+use_tempfiles = True
+debug = False
+offline = False
+plugins = []
+language = en
+tor = always
+EOL
+    log "ZeroNet configuration file created at $conf_file with security settings"
+}
+
+get_zeronet_port() {
+    log "Starting ZeroNet briefly to generate config..."
+    cd $ZERONET_DIR && . ./venv/bin/activate
+    python zeronet.py --silent & 
+    TEMP_ZERONET_PID=$!
+    sleep 10
+    kill $TEMP_ZERONET_PID
+
+    FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
+    log "ZeroNet chose port: $FILESERVER_PORT"
+}
+
 configure_tor() {
     log "Configuring Tor..."
     mkdir -p $HOME/.tor
@@ -420,14 +362,15 @@ SocksPort 49050
 ControlPort 49051
 CookieAuthentication 1
 HiddenServiceDir /data/data/com.termux/files/home/.tor/ZeroNet
-HiddenServicePort 8008 127.0.0.1:$FILESERVER_PORT
+HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
 Log notice file /data/data/com.termux/files/usr/var/log/tor/notices.log
 EOL
     log "Tor configuration created at $HOME/.tor/torrc"
 }
 
-log "Setting up Tor..."
+create_zeronet_conf
+get_zeronet_port
 configure_tor
 
 log "Starting Tor service..."
@@ -437,7 +380,6 @@ TOR_PID=$!
 log "Waiting for Tor to start and generate the hidden service..."
 sleep 30
 
-# Simple check to see if Tor is still running
 if kill -0 $TOR_PID 2>/dev/null; then
     log "Tor process is still running after 30 seconds. Proceeding with hidden service setup."
 else
@@ -471,20 +413,21 @@ read -r boot_setup
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
     cat > "$BOOT_SCRIPT" << EOL
-#!/data/data/com.termux/files/usr/bin/sh
+#!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
-ZERONET_DIR=/data/data/com.termux/files/home/apps/zeronet
+ZERONET_DIR=$ZERONET_DIR
+TORRC_FILE=$HOME/.tor/torrc
 
 start_tor() {
-    tor &
+    tor -f "\$TORRC_FILE" &
     sleep 30
 }
 
 start_zeronet() {
-    cd \$ZERONET_DIR
+    cd "\$ZERONET_DIR"
     . ./venv/bin/activate
-    python zeronet.py --config_file \$ZERONET_DIR/zeronet.conf &
+    python zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
     
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
@@ -501,62 +444,12 @@ else
     log "Please open Termux:Boot once since the last fresh start of Termux, then run this script again to set up auto-start."
 fi
 
-create_zeronet_conf() {
-    local conf_file="$ZERONET_DIR/zeronet.conf"
-    
-    # Read existing configuration for fileserver_port
-    if [ -f "$conf_file" ]; then
-        FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$conf_file")
-    fi
-
-    # If fileserver_port is not found, use a default
-    if [ -z "$FILESERVER_PORT" ]; then
-        FILESERVER_PORT=$(shuf -i 1024-65535 -n 1)
-        log "Generated random fileserver port: $FILESERVER_PORT"
-    fi
-
-    # Create new configuration with security settings
-    cat > "$conf_file" << EOL
-[global]
-ui_ip = 127.0.0.1
-ui_port = 43110
-data_dir = $ZERONET_DIR/data
-log_dir = /data/data/com.termux/files/usr/var/log/zeronet
-tor_controller = 127.0.0.1:49051
-tor_proxy = 127.0.0.1:49050
-tor_use_bridge = False
-trackers_file = $ZERONET_DIR/data/trackers.json
-trackers_proxy = tor
-proxy = tor
-fileserver_port = $FILESERVER_PORT
-ip_external = ${ONION_ADDRESS}:8008
-fileserver_ip_type = ipv4
-use_openssl = True
-disable_udp = True
-disable_encryption = False
-trackers_file = $ZERONET_DIR/data/trackers.json
-homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
-version_check = False
-use_tempfiles = True
-debug = False
-offline = False
-plugins = []
-language = en
-tor = always
-EOL
-    log "ZeroNet configuration file updated at $conf_file with security settings"
-}
-
-# First, create the initial ZeroNet configuration to get a random port
-create_zeronet_conf
-
 log "Starting ZeroNet..."
 start_zeronet() {
     update_trackers
     cd $ZERONET_DIR
     . ./venv/bin/activate
     
-    # Rename disabled-Bootstrapper to Bootstrapper
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
         log "Renamed disabled-Bootstrapper to Bootstrapper"
@@ -598,13 +491,7 @@ restart_zeronet() {
 }
 
 LAST_CHECKED_TIME=0
-
-get_zeronet_homepage() {
-    # Use the ZeroNet Conservancy homepage address
-    echo "191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um"
-}
-
-HOMEPAGE_ADDRESS=$(get_zeronet_homepage)
+HOMEPAGE_ADDRESS="191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um"
 
 check_for_new_content() {
     local content_json="$ZERONET_DIR/data/$HOMEPAGE_ADDRESS/content.json"
