@@ -310,30 +310,22 @@ update_trackers() {
 
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-
+    
     cat > "$conf_file" << EOL
 [global]
-ui_ip = 127.0.0.1
-ui_port = 43110
 data_dir = $ZERONET_DIR/data
 log_dir = /data/data/com.termux/files/usr/var/log/zeronet
+ui_ip = 127.0.0.1
+ui_port = 43110
 tor_controller = 127.0.0.1:49051
 tor_proxy = 127.0.0.1:49050
-tor_use_bridge = False
 trackers_file = $ZERONET_DIR/data/trackers.json
-trackers_proxy = tor
-proxy = tor
+language = en
+debug = False
+tor = always
 fileserver_ip_type = ipv4
 use_openssl = True
-disable_encryption = False
-homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
-version_check = False
-use_tempfiles = True
-debug = False
-offline = False
-plugins = []
-language = en
-tor = always
+ip_local = 127.0.0.1
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
