@@ -2,7 +2,7 @@
 
 set -e
 
-REPO_URL="https://github.com/styromaniac/Zish/raw/refs/heads/main"
+REPO_URL="https://raw.githubusercontent.com/styromaniac/Zish/main"
 LOG_FILE="$HOME/zeronet_install.log"
 
 log() {
@@ -16,10 +16,15 @@ log_error() {
 
 download_and_execute() {
     local script_name=$1
-    log "Downloading and executing $script_name..."
-    bash <(curl -fsSL "$REPO_URL/$script_name" | sed 's/\r$//')
-    if [ $? -ne 0 ]; then
-        log_error "Failed to execute $script_name"
+    local full_url="$REPO_URL/$script_name"
+    log "Downloading and executing $full_url..."
+    if curl -fsSL "$full_url" > /dev/null 2>&1; then
+        bash <(curl -fsSL "$full_url" | sed 's/\r$//')
+        if [ $? -ne 0 ]; then
+            log_error "Failed to execute $script_name"
+        fi
+    else
+        log_error "Failed to download $script_name. URL: $full_url"
     fi
 }
 
