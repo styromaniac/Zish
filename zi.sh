@@ -31,8 +31,10 @@ main() {
     download_and_execute "configure_tor.sh"
     download_and_execute "create_boot_script.sh"
 
-    log "ZeroNet installation complete. You can now run '$HOME/.termux/boot/start-zeronet' to start ZeroNet."
+    log "ZeroNet installation complete."
+    log "You can now run '$HOME/.termux/boot/start-zeronet' to start ZeroNet manually."
     log "To enable auto-start, make sure you've opened Termux:Boot at least once since the last fresh start of Termux."
+    log "Enjoy using ZeroNet!"
 }
 
 main
