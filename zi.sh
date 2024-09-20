@@ -323,7 +323,7 @@ trackers_file = $ZERONET_DIR/data/trackers.json
 language = en
 debug = False
 tor = always
-use_openssl = True
+use_openssl = true
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
