@@ -211,6 +211,7 @@ pip_operation_with_retries() {
 
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
+export CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
 pip install --upgrade pip setuptools wheel || { log_error "Failed to upgrade pip, setuptools, and wheel"; exit 1; }
 pip install gevent pycryptodome pyOpenSSL || { log_error "Failed to install gevent, pycryptodome, and pyOpenSSL"; exit 1; }
