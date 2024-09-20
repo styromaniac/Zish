@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-termux-wakelock
+termux-wake-lock
 
 set -e
 
