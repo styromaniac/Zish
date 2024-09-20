@@ -1,8 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+set -e
+
 termux-wake-lock
 
-set -e
+termux-change-repo
 
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
