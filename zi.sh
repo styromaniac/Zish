@@ -209,8 +209,11 @@ pip_operation_with_retries() {
     return 1
 }
 
+export CFLAGS="-I$PREFIX/include"
+export LDFLAGS="-L$PREFIX/lib"
+
 pip install --upgrade pip setuptools wheel || { log_error "Failed to upgrade pip, setuptools, and wheel"; exit 1; }
-pip install gevent pycryptodome || { log_error "Failed to install gevent and pycryptodome"; exit 1; }
+pip install gevent pycryptodome pyOpenSSL || { log_error "Failed to install gevent, pycryptodome, and pyOpenSSL"; exit 1; }
 
 export LIBRARY_PATH=$PREFIX/lib
 export C_INCLUDE_PATH=$PREFIX/include
