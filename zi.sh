@@ -51,7 +51,7 @@ required_packages=(
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
-    rust openssl openssl-dev
+    rust openssl
 )
 
 install_package() {
