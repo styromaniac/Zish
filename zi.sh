@@ -48,9 +48,9 @@ pkg upgrade -y
 
 required_packages=(
     termux-tools termux-keyring python
-    netcat-openbsd binutils git cmake libffi openssl
+    netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor
+    clang make termux-api tor rust
 )
 
 install_package() {
@@ -79,6 +79,35 @@ for package in "${required_packages[@]}"; do
         install_package "$package" || exit 1
     fi
 done
+
+log "Installing Rust and building openssl-src..."
+git clone https://github.com/alexcrichton/openssl-src-rs.git || log_error "Failed to clone openssl-src repository"
+cd openssl-src-rs
+
+export OPENSSL_DIR=$PREFIX
+export OPENSSL_INCLUDE_DIR=$PREFIX/include
+export OPENSSL_LIB_DIR=$PREFIX/lib
+
+cargo build --release || log_error "Failed to build openssl-src"
+make install || log_error "Failed to install built OpenSSL"
+
+cd ..
+rm -rf openssl-src-rs
+
+echo '
+# OpenSSL environment setup
+export OPENSSL_DIR=$PREFIX
+export OPENSSL_INCLUDE_DIR=$PREFIX/include
+export OPENSSL_LIB_DIR=$PREFIX/lib
+export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
+
+# Alias for updating and upgrading packages
+alias pkgup="pkg update && pkg upgrade"
+' >> ~/.bashrc
+
+source ~/.bashrc
+
+log "OpenSSL installation from Rust sources completed."
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -211,44 +240,23 @@ pip_operation_with_retries() {
 
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
-export CRYPTOGRAPHY_DONT_BUILD_RUST=1
 
-pip install --upgrade pip setuptools wheel || { log_error "Failed to upgrade pip, setuptools, and wheel"; exit 1; }
-pip install gevent pycryptodome pyOpenSSL || { log_error "Failed to install gevent, pycryptodome, and pyOpenSSL"; exit 1; }
-
-export LIBRARY_PATH=$PREFIX/lib
-export C_INCLUDE_PATH=$PREFIX/include
-export LD_LIBRARY_PATH=$PREFIX/lib
-export LIBSECP256K1_STATIC=1
-
-pip uninstall -y coincurve
-pip cache purge
-
-cd ~
-git_clone_with_retries https://github.com/bitcoin-core/secp256k1.git libsecp256k1
-cd libsecp256k1
-
-./autogen.sh
-./configure --prefix=$PREFIX --enable-module-recovery --enable-experimental --enable-module-ecdh
-make
-make install
-
-cd "$ZERONET_DIR"
-
-CFLAGS="-I$PREFIX/include" LDFLAGS="-L$PREFIX/lib -lpython3.11 -lsecp256k1" pip install --no-cache-dir --no-binary :all: coincurve
-
-if ! python -c "from coincurve import PrivateKey; key = PrivateKey(); print(key.public_key.format())" > /dev/null 2>&1; then
-    log_error "Failed to install coincurve"
+log "Installing required Python packages..."
+if ! pip_operation_with_retries install gevent pycryptodome cryptography; then
+    log_error "Failed to install required Python packages. Please check your internet connection and try again."
     exit 1
 fi
 
-log "coincurve installed successfully"
-python -c "import pkg_resources; print(f'coincurve version: {pkg_resources.get_distribution(\"coincurve\").version}')"
+log "Attempting to install pyOpenSSL..."
+if ! pip_operation_with_retries install pyOpenSSL; then
+    log "Failed to install pyOpenSSL. This is not critical, but some features may not work correctly."
+    log "You can try installing it manually later with: pip install pyOpenSSL"
+fi
 
-cd ~
-rm -rf libsecp256k1
-
-cd "$ZERONET_DIR"
+# Verify installations
+log "Verifying installations..."
+python -c "import gevent; import Crypto; import cryptography; print('gevent, pycryptodome, and cryptography successfully installed')"
+python -c "import OpenSSL; print('pyOpenSSL successfully installed')" || log "pyOpenSSL not installed, but we can continue."
 
 chmod -R u+rwX "$ZERONET_DIR"
 
