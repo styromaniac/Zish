@@ -344,11 +344,26 @@ get_zeronet_port() {
     cd $ZERONET_DIR && . ./venv/bin/activate
     python zeronet.py --config_file $ZERONET_DIR/zeronet.conf > zeronet_output.log 2>&1 &
     TEMP_ZERONET_PID=$!
-    sleep 10
-    kill $TEMP_ZERONET_PID
+    
+    # Wait for up to 30 seconds for ZeroNet to start
+    for i in {1..30}; do
+        if grep -q "fileserver_port" "$ZERONET_DIR/zeronet.conf" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+    done
+
+    # Try to kill the temporary ZeroNet process
+    if kill $TEMP_ZERONET_PID 2>/dev/null; then
+        log "Temporary ZeroNet process stopped."
+    else
+        log "Warning: Could not stop temporary ZeroNet process. It may have already exited."
+    fi
 
     FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
     if [ -z "$FILESERVER_PORT" ]; then
+        log "Failed to determine ZeroNet's file server port. Here's the ZeroNet output:"
+        cat zeronet_output.log
         log_error "Failed to determine ZeroNet's file server port"
         exit 1
     fi
