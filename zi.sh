@@ -348,6 +348,7 @@ get_zeronet_port() {
     # Wait for up to 30 seconds for ZeroNet to start
     for i in {1..30}; do
         if grep -q "fileserver_port" "$ZERONET_DIR/zeronet.conf" 2>/dev/null; then
+            log "Found fileserver_port in config after $i seconds"
             break
         fi
         sleep 1
@@ -359,6 +360,9 @@ get_zeronet_port() {
     else
         log "Warning: Could not stop temporary ZeroNet process. It may have already exited."
     fi
+
+    log "Contents of zeronet.conf:"
+    cat "$ZERONET_DIR/zeronet.conf"
 
     FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
     if [ -z "$FILESERVER_PORT" ]; then
