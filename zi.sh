@@ -86,16 +86,13 @@ curl -O https://www.openssl.org/source/openssl-1.1.1k.tar.gz || log_error "Faile
 tar xzf openssl-1.1.1k.tar.gz || log_error "Failed to extract OpenSSL source"
 cd openssl-1.1.1k
 
-export ANDROID_NDK_HOME=$PREFIX
-export PATH=$ANDROID_NDK_HOME/bin:$PATH
-
-./Configure android-arm64 no-shared \
+# Configure OpenSSL for Termux
+./Configure linux-generic64 no-shared \
     --prefix=$PREFIX \
     --openssldir=$PREFIX/etc/ssl \
-    --with-zlib-include=$PREFIX/include \
-    --with-zlib-lib=$PREFIX/lib \
-    -D__ANDROID_API__=24 || log_error "Failed to configure OpenSSL"
+    || log_error "Failed to configure OpenSSL"
 
+# Build and install
 make -j$(nproc) || log_error "Failed to build OpenSSL"
 make install_sw || log_error "Failed to install OpenSSL"
 
