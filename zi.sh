@@ -6,10 +6,12 @@ ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
 
+# Function to log messages
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
+# Function to log errors and exit
 log_error() {
     log "[ERROR] $1"
     exit 1
@@ -21,6 +23,7 @@ termux-change-repo
 
 termux-setup-storage
 
+# Function to update package mirrors
 update_mirrors() {
     local max_attempts=5
     local attempt=1
@@ -48,13 +51,13 @@ pkg upgrade -y
 
 # Install required packages
 required_packages=(
-    termux-tools termux-keyring python
+    termux-tools termux-keyring
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
-    rust openssl openssl-tool
+    rust openssl openssl-tool wget build-essential
+    libffi-dev openssl-dev zlib-dev libbz2-dev liblzma-dev libsqlite-dev
 )
-
 install_package() {
     local package=$1
     local max_attempts=3
@@ -89,6 +92,51 @@ export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
 export LD_LIBRARY_PATH="$PREFIX/lib"
 
+# Compile Python 3.10 from source
+log "Downloading and compiling Python 3.10.13 from source..."
+cd $HOME
+wget https://www.python.org/ftp/python/3.10.13/Python-3.10.13.tgz
+tar -xf Python-3.10.13.tgz
+cd Python-3.10.13
+
+./configure --prefix=$PREFIX --enable-shared --enable-optimizations --with-ensurepip=install
+make -j$(nproc)
+make install
+
+# Verify Python 3.10 installation
+if ! command -v python3.10 &> /dev/null; then
+    log_error "Python 3.10 installation failed."
+fi
+log "Python 3.10 installed successfully."
+
+# Clean up Python source files
+cd $HOME
+rm -rf Python-3.10.13*
+export PATH="$PREFIX/bin:$PATH"
+
+# Prompt user for ZeroNet source URL
+log "Please enter the ZeroNet source URL you wish to use (Git repository, .zip, or .tar.gz):"
+read -r ZERONET_SOURCE_URL
+ZERONET_SOURCE_URL=${ZERONET_SOURCE_URL:-https://github.com/HelloZeroNet/ZeroNet.git}
+
+# Determine the source type
+if [[ $ZERONET_SOURCE_URL == *.git ]]; then
+    SOURCE_TYPE="git"
+elif [[ $ZERONET_SOURCE_URL == *.zip ]]; then
+    SOURCE_TYPE="zip"
+elif [[ $ZERONET_SOURCE_URL == *.tar.gz ]]; then
+    SOURCE_TYPE="tar.gz"
+else
+    log_error "Unsupported ZeroNet source URL format."
+fi
+
+# Prompt user for ZeroNet branch or tag (Git only)
+if [ "$SOURCE_TYPE" == "git" ]; then
+    log "Enter the branch or tag you wish to checkout (leave blank for default branch):"
+    read -r ZERONET_BRANCH
+fi
+
+# Create ZeroNet directory
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
     log "Proceeding to adjust permissions and clean the directory."
@@ -98,87 +146,51 @@ fi
 
 mkdir -p "$ZERONET_DIR"
 
-WORK_DIR="$(mktemp -d)"
-cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
+# Download and extract ZeroNet based on source type
+cd "$ZERONET_DIR"
 
-log "Cloning ZeroNet repository..."
-git clone https://github.com/HelloZeroNet/ZeroNet.git zeronet_repo || { log_error "Failed to clone ZeroNet repository"; exit 1; }
-base_dir="$WORK_DIR/zeronet_repo"
+if [ "$SOURCE_TYPE" == "git" ]; then
+    # Clone ZeroNet repository
+    log "Cloning ZeroNet repository from $ZERONET_SOURCE_URL..."
+    git clone "$ZERONET_SOURCE_URL" . || { log_error "Failed to clone ZeroNet repository"; exit 1; }
+    # Checkout the specified branch or tag if provided
+    if [ -n "$ZERONET_BRANCH" ]; then
+        log "Checking out branch/tag: $ZERONET_BRANCH"
+        git checkout "$ZERONET_BRANCH" || { log_error "Failed to checkout branch/tag $ZERONET_BRANCH"; exit 1; }
+    fi
+elif [ "$SOURCE_TYPE" == "zip" ]; then
+    # Download and extract zip file
+    log "Downloading ZeroNet zip archive..."
+    wget -O zeronet.zip "$ZERONET_SOURCE_URL" || { log_error "Failed to download ZeroNet zip archive"; exit 1; }
+    unzip zeronet.zip || { log_error "Failed to extract ZeroNet zip archive"; exit 1; }
+    # Move contents to ZERONET_DIR
+    mv ZeroNet-*/* . || { log_error "Failed to move ZeroNet files"; exit 1; }
+    rm -rf ZeroNet-* zeronet.zip
+elif [ "$SOURCE_TYPE" == "tar.gz" ]; then
+    # Download and extract tar.gz file
+    log "Downloading ZeroNet tar.gz archive..."
+    wget -O zeronet.tar.gz "$ZERONET_SOURCE_URL" || { log_error "Failed to download ZeroNet tar.gz archive"; exit 1; }
+    tar -xzf zeronet.tar.gz || { log_error "Failed to extract ZeroNet tar.gz archive"; exit 1; }
+    # Move contents to ZERONET_DIR
+    mv ZeroNet-*/* . || { log_error "Failed to move ZeroNet files"; exit 1; }
+    rm -rf ZeroNet-* zeronet.tar.gz
+fi
 
-log "Adjusting ownership of files before moving..."
-chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
-
-log "Moving extracted files to $ZERONET_DIR..."
-mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
-
-rm -rf "$WORK_DIR"
-
-if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
+if [ ! -f "zeronet.py" ]; then
     log_error "zeronet.py not found in the expected directory."
     exit 1
 fi
 
-cd "$ZERONET_DIR" || exit 1
-
-if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python -m venv "$ZERONET_DIR/venv"
-fi
+# Create virtual environment with Python 3.10
+log "Creating virtual environment with Python 3.10..."
+python3.10 -m venv venv
 
 source "$ZERONET_DIR/venv/bin/activate"
-
-log "Installing Rust..."
-log "Rust installation completed. Verifying installation..."
-
-if ! command -v rustc &> /dev/null; then
-    log_error "Rust installation failed. 'rustc' command not found."
-fi
-if ! command -v cargo &> /dev/null; then
-    log_error "Rust installation failed. 'cargo' command not found."
-fi
-
-log "Rust installed successfully."
 
 log "Installing required Python packages..."
 pip install --upgrade pip setuptools wheel
 
-export CFLAGS="-I$PREFIX/include"
-export LDFLAGS="-L$PREFIX/lib"
-export LD_LIBRARY_PATH="$PREFIX/lib"
-
-pip install gevent pycryptodome cryptography pyOpenSSL
-
-# Patch coincurve for Python 3.11
-log "Patching coincurve for Python 3.11 compatibility..."
-
-# Uninstall existing coincurve if any
-pip uninstall -y coincurve
-
-# Download coincurve source code
-pip download coincurve
-
-# Extract the source code
-coincurve_archive=$(ls coincurve-*.tar.gz)
-tar -xzf "$coincurve_archive"
-
-# Get the exact directory name of coincurve
-coincurve_dir=$(tar -tzf "$coincurve_archive" | head -1 | cut -f1 -d"/")
-cd "$coincurve_dir"
-
-# Apply patch
-if [ -f "_libsecp256k1.pyx" ]; then
-    sed -i 's/_Py_NoneStruct/Py_None/g' _libsecp256k1.pyx
-else
-    log_error "File _libsecp256k1.pyx not found in $(pwd)"
-fi
-
-# Build and install
-pip install .
-
-cd ..
-
-# Clean up
-rm -rf "$coincurve_dir"
-rm "$coincurve_archive"
+pip install gevent pycryptodome cryptography pyOpenSSL coincurve
 
 # Verify installations
 log "Verifying installations..."
@@ -404,7 +416,7 @@ restart_zeronet() {
 }
 
 LAST_CHECKED_TIME=0
-HOMEPAGE_ADDRESS="1HeLLo4uzjaLetFx6NH3PMwFP3qbRbTf3D"  # Updated to ZeroNet's default home page
+HOMEPAGE_ADDRESS="1HeLLo4uzjaLetFx6NH3PMwFP3qbRbTf3D"  # ZeroNet's default home page
 
 check_for_new_content() {
     local content_json="$ZERONET_DIR/data/$HOMEPAGE_ADDRESS/content.json"
