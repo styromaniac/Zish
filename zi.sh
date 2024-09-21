@@ -165,7 +165,11 @@ coincurve_dir=$(tar -tzf "$coincurve_archive" | head -1 | cut -f1 -d"/")
 cd "$coincurve_dir"
 
 # Apply patch
-sed -i 's/_Py_NoneStruct/Py_None/g' coincurve/_libsecp256k1.pyx
+if [ -f "_libsecp256k1.pyx" ]; then
+    sed -i 's/_Py_NoneStruct/Py_None/g' _libsecp256k1.pyx
+else
+    log_error "File _libsecp256k1.pyx not found in $(pwd)"
+fi
 
 # Build and install
 pip install .
