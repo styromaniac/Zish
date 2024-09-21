@@ -51,6 +51,7 @@ required_packages=(
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
+    rust openssl openssl-dev
 )
 
 install_package() {
@@ -80,37 +81,13 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-log "Installing and building OpenSSL..."
-cd ~
-curl -O https://www.openssl.org/source/openssl-1.1.1k.tar.gz || log_error "Failed to download OpenSSL source"
-tar xzf openssl-1.1.1k.tar.gz || log_error "Failed to extract OpenSSL source"
-cd openssl-1.1.1k
+# Remove manual OpenSSL compilation and use Termux's OpenSSL
+log "Using OpenSSL provided by Termux"
 
-# Configure OpenSSL for Termux
-./Configure linux-aarch64 no-shared \
-    --prefix=$PREFIX \
-    --openssldir=$PREFIX/etc/ssl \
-    || log_error "Failed to configure OpenSSL"
-
-# Build and install
-make -j$(nproc) || log_error "Failed to build OpenSSL"
-make install_sw || log_error "Failed to install OpenSSL"
-
-cd ~
-rm -rf openssl-1.1.1k openssl-1.1.1k.tar.gz
-
-# Add environment setup to .bashrc
-echo '
-# OpenSSL environment setup
-export OPENSSL_DIR=$PREFIX
-export OPENSSL_INCLUDE_DIR=$PREFIX/include
-export OPENSSL_LIB_DIR=$PREFIX/lib
-export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
-' >> ~/.bashrc
-
-source ~/.bashrc
-
-log "OpenSSL installation completed."
+# Ensure environment variables are correctly set
+export CFLAGS="-I$PREFIX/include"
+export LDFLAGS="-L$PREFIX/lib"
+export LD_LIBRARY_PATH="$PREFIX/lib"
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -222,13 +199,9 @@ fi
 source "$ZERONET_DIR/venv/bin/activate"
 
 log "Installing Rust..."
-pkg install -y rust || log_error "Failed to install Rust"
-
-# Ensure Rust binaries are in PATH
-echo 'export PATH=$PATH:$HOME/.cargo/bin' >> $HOME/.bashrc
-source $HOME/.bashrc
-
+# Rust is already included in required_packages
 log "Rust installation completed. Verifying installation..."
+
 if ! command -v rustc &> /dev/null; then
     log_error "Rust installation failed. 'rustc' command not found."
 fi
@@ -239,21 +212,14 @@ fi
 log "Rust installed successfully."
 
 log "Installing required Python packages..."
-pip install --upgrade pip
+pip install --upgrade pip setuptools wheel
 
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
+export LD_LIBRARY_PATH="$PREFIX/lib"
 
-pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
-
-# Install cryptography with Rust
-log "Installing cryptography with Rust..."
-CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography || {
-    log "Failed to install cryptography with CRYPTOGRAPHY_DONT_BUILD_RUST=1. Trying without this flag..."
-    pip install cryptography
-} || log_error "Failed to install cryptography"
-
-pip install pyOpenSSL || log_error "Failed to install pyOpenSSL"
+# Install cryptography without suppressing Rust components
+pip install gevent pycryptodome cryptography pyOpenSSL || log_error "Failed to install required Python packages"
 
 # Verify installations
 log "Verifying installations..."
@@ -454,14 +420,14 @@ start_zeronet() {
     update_trackers
     cd $ZERONET_DIR
     . ./venv/bin/activate
-    
+
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
         log "Renamed disabled-Bootstrapper to Bootstrapper"
     else
         log "disabled-Bootstrapper directory not found"
     fi
-    
+
     python zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
