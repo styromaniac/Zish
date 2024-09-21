@@ -331,24 +331,6 @@ with open('$TRACKERS_FILE', 'w') as f:
     sleep 5
 }
 
-create_zeronet_conf() {
-    local conf_file="$ZERONET_DIR/zeronet.conf"
-    
-    cat > "$conf_file" << EOL
-[global]
-data_dir = $ZERONET_DIR/data
-log_dir = /data/data/com.termux/files/usr/var/log/zeronet
-ui_ip = 127.0.0.1
-ui_port = 43110
-tor_controller = 127.0.0.1:49051
-tor_proxy = 127.0.0.1:49050
-trackers_file = $ZERONET_DIR/data/trackers.json
-language = en
-tor = always
-EOL
-    log "ZeroNet configuration file created at $conf_file with security settings"
-}
-
 get_zeronet_port() {
     log "Starting ZeroNet briefly to generate config..."
     cd $ZERONET_DIR && . ./venv/bin/activate
@@ -387,6 +369,24 @@ get_zeronet_port() {
     rm zeronet_output.log
 }
 
+create_zeronet_conf() {
+    local conf_file="$ZERONET_DIR/zeronet.conf"
+    
+    cat > "$conf_file" << EOL
+[global]
+data_dir = $ZERONET_DIR/data
+log_dir = /data/data/com.termux/files/usr/var/log/zeronet
+ui_ip = 127.0.0.1
+ui_port = 43110
+tor_controller = 127.0.0.1:49051
+tor_proxy = 127.0.0.1:49050
+trackers_file = $ZERONET_DIR/data/trackers.json
+language = en
+tor = always
+EOL
+    log "ZeroNet configuration file created at $conf_file with security settings"
+}
+
 configure_tor() {
     log "Configuring Tor..."
     mkdir -p $HOME/.tor
@@ -405,8 +405,10 @@ EOL
     log "Tor configuration created at $HOME/.tor/torrc"
 }
 
-create_zeronet_conf
+# Execute the functions in the new order
+update_trackers
 get_zeronet_port
+create_zeronet_conf
 configure_tor
 
 log "Starting Tor service..."
@@ -482,7 +484,6 @@ fi
 
 log "Starting ZeroNet..."
 start_zeronet() {
-    update_trackers
     cd $ZERONET_DIR
     . ./venv/bin/activate
     
