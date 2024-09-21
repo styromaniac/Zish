@@ -81,19 +81,25 @@ for package in "${required_packages[@]}"; do
 done
 
 log "Installing Rust and building openssl-src..."
+pkg install -y rust git build-essential || log_error "Failed to install Rust and build essentials"
 git clone https://github.com/alexcrichton/openssl-src-rs.git || log_error "Failed to clone openssl-src repository"
 cd openssl-src-rs
 
+# Set up environment variables for the build
 export OPENSSL_DIR=$PREFIX
 export OPENSSL_INCLUDE_DIR=$PREFIX/include
 export OPENSSL_LIB_DIR=$PREFIX/lib
 
+# Build openssl-src
 cargo build --release || log_error "Failed to build openssl-src"
+
+# Install the built OpenSSL
 make install || log_error "Failed to install built OpenSSL"
 
 cd ..
 rm -rf openssl-src-rs
 
+# Add environment setup to .bashrc
 echo '
 # OpenSSL environment setup
 export OPENSSL_DIR=$PREFIX
@@ -238,25 +244,26 @@ pip_operation_with_retries() {
     return 1
 }
 
+# Set environment variables for compilation
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
+export OPENSSL_INCLUDE_DIR=$PREFIX/include
+export OPENSSL_LIB_DIR=$PREFIX/lib
+export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
 
 log "Installing required Python packages..."
-if ! pip_operation_with_retries install gevent pycryptodome cryptography; then
+if ! pip_operation_with_retries install --no-cache-dir \
+    gevent \
+    pycryptodome \
+    cryptography \
+    pyOpenSSL; then
     log_error "Failed to install required Python packages. Please check your internet connection and try again."
     exit 1
 fi
 
-log "Attempting to install pyOpenSSL..."
-if ! pip_operation_with_retries install pyOpenSSL; then
-    log "Failed to install pyOpenSSL. This is not critical, but some features may not work correctly."
-    log "You can try installing it manually later with: pip install pyOpenSSL"
-fi
-
 # Verify installations
 log "Verifying installations..."
-python -c "import gevent; import Crypto; import cryptography; print('gevent, pycryptodome, and cryptography successfully installed')"
-python -c "import OpenSSL; print('pyOpenSSL successfully installed')" || log "pyOpenSSL not installed, but we can continue."
+python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 
 chmod -R u+rwX "$ZERONET_DIR"
 
