@@ -56,7 +56,7 @@ required_packages=(
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
     rust openssl openssl-tool wget build-essential
-    libffi-dev openssl-dev zlib-dev libbz2-dev liblzma-dev libsqlite-dev
+    zlib libbz2 liblzma libsqlite
 )
 install_package() {
     local package=$1
