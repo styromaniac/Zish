@@ -221,6 +221,10 @@ fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
+log "Installing Rust..."
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source $HOME/.cargo/env
+
 log "Installing required Python packages..."
 pip install --upgrade pip
 
@@ -229,8 +233,12 @@ export LDFLAGS="-L$PREFIX/lib"
 
 pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
-# Install an older version of cryptography that doesn't require Rust
-pip install cryptography==3.4.7 || log_error "Failed to install cryptography"
+# Install cryptography with Rust
+log "Installing cryptography with Rust..."
+CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography || {
+    log "Failed to install cryptography with CRYPTOGRAPHY_DONT_BUILD_RUST=1. Trying without this flag..."
+    pip install cryptography
+} || log_error "Failed to install cryptography"
 
 pip install pyOpenSSL || log_error "Failed to install pyOpenSSL"
 
