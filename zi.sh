@@ -81,7 +81,7 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-# Remove manual OpenSSL compilation and use Termux's OpenSSL
+# Using OpenSSL provided by Termux
 log "Using OpenSSL provided by Termux"
 
 # Ensure environment variables are correctly set
@@ -310,15 +310,29 @@ get_zeronet_port() {
     cd $ZERONET_DIR && . ./venv/bin/activate
     python zeronet.py --config_file $ZERONET_DIR/zeronet.conf > zeronet_output.log 2>&1 &
     TEMP_ZERONET_PID=$!
-    sleep 10
-    kill $TEMP_ZERONET_PID
+    
+    # Wait until zeronet.conf is generated or timeout after 60 seconds
+    timeout=60
+    elapsed=0
+    while [ ! -f "$ZERONET_DIR/zeronet.conf" ] && [ $elapsed -lt $timeout ]; do
+        sleep 1
+        elapsed=$((elapsed+1))
+    done
+
+    if [ ! -f "$ZERONET_DIR/zeronet.conf" ]; then
+        kill $TEMP_ZERONET_PID
+        log_error "zeronet.conf was not generated after $timeout seconds."
+        exit 1
+    fi
 
     FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
     if [ -z "$FILESERVER_PORT" ]; then
+        kill $TEMP_ZERONET_PID
         log_error "Failed to determine ZeroNet's file server port"
         exit 1
     fi
     log "ZeroNet chose port: $FILESERVER_PORT"
+    kill $TEMP_ZERONET_PID
     rm zeronet_output.log
 }
 
