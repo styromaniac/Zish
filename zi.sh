@@ -310,8 +310,18 @@ update_trackers() {
 
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
-        if curl -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
+        if curl -s -f "$tracker_url" -o trackers_temp.txt; then
             log "Successfully downloaded tracker list from $tracker_url"
+            # Convert the plain text tracker list to JSON format
+            python -c "
+import json
+with open('trackers_temp.txt', 'r') as f:
+    trackers = [line.strip() for line in f if line.strip()]
+with open('$TRACKERS_FILE', 'w') as f:
+    json.dump({'shared': trackers}, f, indent=2)
+"
+            rm trackers_temp.txt
+            log "Trackers list updated in $TRACKERS_FILE"
             return
         else
             log "Failed to download from $tracker_url."
@@ -347,8 +357,8 @@ get_zeronet_port() {
     
     # Wait for up to 30 seconds for ZeroNet to start
     for i in {1..30}; do
-        if grep -q "fileserver_port" "$ZERONET_DIR/zeronet.conf" 2>/dev/null; then
-            log "Found fileserver_port in config after $i seconds"
+        if grep -q "FileServer listening on" zeronet_output.log; then
+            log "Found FileServer listening message after $i seconds"
             break
         fi
         sleep 1
@@ -361,10 +371,7 @@ get_zeronet_port() {
         log "Warning: Could not stop temporary ZeroNet process. It may have already exited."
     fi
 
-    log "Contents of zeronet.conf:"
-    cat "$ZERONET_DIR/zeronet.conf"
-
-    FILESERVER_PORT=$(grep -oP '(?<=fileserver_port = )\d+' "$ZERONET_DIR/zeronet.conf")
+    FILESERVER_PORT=$(grep -oP '(?<=FileServer listening on port )\d+' zeronet_output.log)
     if [ -z "$FILESERVER_PORT" ]; then
         log "Failed to determine ZeroNet's file server port. Here's the ZeroNet output:"
         cat zeronet_output.log
@@ -372,6 +379,11 @@ get_zeronet_port() {
         exit 1
     fi
     log "ZeroNet chose port: $FILESERVER_PORT"
+
+    # Update zeronet.conf with the found port
+    sed -i "s/^fileserver_port = .*/fileserver_port = $FILESERVER_PORT/" "$ZERONET_DIR/zeronet.conf"
+    log "Updated zeronet.conf with fileserver_port = $FILESERVER_PORT"
+
     rm zeronet_output.log
 }
 
