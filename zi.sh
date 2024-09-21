@@ -51,7 +51,7 @@ required_packages=(
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
-    rust openssl openssl-tool  # Added openssl-tool here
+    rust openssl openssl-tool
 )
 
 install_package() {
@@ -198,7 +198,6 @@ fi
 source "$ZERONET_DIR/venv/bin/activate"
 
 log "Installing Rust..."
-# Rust is already included in required_packages
 log "Rust installation completed. Verifying installation..."
 
 if ! command -v rustc &> /dev/null; then
@@ -218,7 +217,13 @@ export LDFLAGS="-L$PREFIX/lib"
 export LD_LIBRARY_PATH="$PREFIX/lib"
 
 # Install cryptography without suppressing Rust components
-pip install gevent pycryptodome cryptography pyOpenSSL coincurve || log_error "Failed to install required Python packages"
+pip install gevent pycryptodome cryptography pyOpenSSL || log_error "Failed to install required Python packages"
+
+# Fix for coincurve issue: Install coincurve from source
+log "Installing coincurve from source to fix '_Py_NoneStruct' issue..."
+pip uninstall -y coincurve
+pip install --upgrade cffi
+pip install --no-binary coincurve coincurve || log_error "Failed to install coincurve from source"
 
 # Verify installations
 log "Verifying installations..."
@@ -262,7 +267,7 @@ mkdir -p /data/data/com.termux/files/usr/var/log/
 update_trackers() {
     log "Updating trackers list..."
     TRACKERS_FILE="$ZERONET_DIR/data/trackers.json"
-    trackers_url="https://trackerslist.com/best_aria2.txt"  # Updated to a reliable source
+    trackers_url="https://trackerslist.com/best_aria2.txt"
     mkdir -p "$(dirname "$TRACKERS_FILE")"
 
     if curl -s -f "$trackers_url" -o "$TRACKERS_FILE"; then
