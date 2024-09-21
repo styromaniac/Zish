@@ -46,15 +46,9 @@ update_mirrors || exit 1
 
 pkg upgrade -y
 
-# Install prerequisites
-pkg install -y gnupg
-
-# Add the third-party repository (its-pointless repo) for Python 3.10
-curl -fsSL https://its-pointless.github.io/setup-pointless-repo.sh | bash
-
 # Install required packages
 required_packages=(
-    termux-tools termux-keyring python310
+    termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
@@ -127,7 +121,7 @@ fi
 cd "$ZERONET_DIR" || exit 1
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python3.10 -m venv "$ZERONET_DIR/venv"
+    python -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
@@ -153,9 +147,31 @@ export LD_LIBRARY_PATH="$PREFIX/lib"
 
 pip install gevent pycryptodome cryptography pyOpenSSL
 
-# Install coincurve compatible with Python 3.10
-log "Installing coincurve..."
-pip install coincurve || log_error "Failed to install coincurve"
+# Patch coincurve for Python 3.11
+log "Patching coincurve for Python 3.11 compatibility..."
+
+# Uninstall existing coincurve if any
+pip uninstall -y coincurve
+
+# Download coincurve source code
+pip download coincurve
+
+# Extract the source code
+coincurve_archive=$(ls coincurve-*.tar.gz)
+tar -xzf "$coincurve_archive"
+cd coincurve-*
+
+# Apply patch
+sed -i 's/_Py_NoneStruct/Py_None/g' coincurve/_libsecp256k1.pyx
+
+# Build and install
+pip install .
+
+cd ..
+
+# Clean up
+rm -rf coincurve-*
+rm coincurve-*.tar.gz
 
 # Verify installations
 log "Verifying installations..."
@@ -163,14 +179,7 @@ python -c "import gevent; import Crypto; import cryptography; import OpenSSL; im
 
 chmod -R u+rwX "$ZERONET_DIR"
 
-if [ -f requirements.txt ]; then
-    chmod 644 requirements.txt
-    if ! pip install -r requirements.txt; then
-        log_error "Failed to install from requirements.txt"
-        exit 1
-    fi
-fi
-
+# Create data directory
 mkdir -p ./data
 chmod -R u+rwX ./data
 
@@ -388,12 +397,12 @@ restart_zeronet() {
 }
 
 LAST_CHECKED_TIME=0
-HOMEPAGE_ADDRESS="191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um"
+HOMEPAGE_ADDRESS="1HeLLo4uzjaLetFx6NH3PMwFP3qbRbTf3D"  # Updated to ZeroNet's default home page
 
 check_for_new_content() {
     local content_json="$ZERONET_DIR/data/$HOMEPAGE_ADDRESS/content.json"
     if [ ! -f "$content_json" ]; then
-        log "content.json not found for ZeroNet Conservancy homepage. Skipping check."
+        log "content.json not found for ZeroNet homepage. Skipping check."
         return
     fi
 
@@ -401,23 +410,11 @@ check_for_new_content() {
     local file_mod_time=$(stat -c %Y "$content_json")
 
     if [ $file_mod_time -gt $LAST_CHECKED_TIME ]; then
-        log "New content detected on ZeroNet Conservancy homepage. Checking for new posts..."
-        local new_posts=$(python -c "
-import json
-with open('$content_json', 'r') as f:
-    data = json.load(f)
-posts = data.get('posts', [])
-new_posts = [post for post in posts if post.get('date_added', 0) / 1000 > $LAST_CHECKED_TIME]
-for post in new_posts[:5]:  # Limit to 5 newest posts
-    print(f\"New post: {post.get('title', 'Untitled')}\")")
-
-        if [ ! -z "$new_posts" ]; then
-            log "$new_posts"
-            termux-notification --title "New ZeroNet Content" --content "$new_posts"
-        fi
+        log "New content detected on ZeroNet homepage."
+        termux-notification --title "New ZeroNet Content" --content "New content detected on ZeroNet homepage."
         LAST_CHECKED_TIME=$current_time
     else
-        log "No new content detected on ZeroNet Conservancy homepage."
+        log "No new content detected on ZeroNet homepage."
     fi
 }
 
