@@ -229,8 +229,13 @@ export LDFLAGS="-L$PREFIX/lib"
 
 pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
-# Install cryptography and pyOpenSSL
-CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography || log_error "Failed to install cryptography"
+# Try to install cryptography without Rust
+export CRYPTOGRAPHY_DONT_BUILD_RUST=1
+pip install cryptography || {
+    log "Failed to install cryptography without Rust. Trying to install a pre-built wheel..."
+    pip install --only-binary=:all: cryptography || log_error "Failed to install cryptography"
+}
+
 pip install pyOpenSSL || log_error "Failed to install pyOpenSSL"
 
 # Verify installations
