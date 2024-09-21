@@ -87,7 +87,7 @@ tar xzf openssl-1.1.1k.tar.gz || log_error "Failed to extract OpenSSL source"
 cd openssl-1.1.1k
 
 # Configure OpenSSL for Termux
-./Configure linux-generic64 no-shared \
+./Configure linux-aarch64 no-shared \
     --prefix=$PREFIX \
     --openssldir=$PREFIX/etc/ssl \
     || log_error "Failed to configure OpenSSL"
@@ -106,9 +106,6 @@ export OPENSSL_DIR=$PREFIX
 export OPENSSL_INCLUDE_DIR=$PREFIX/include
 export OPENSSL_LIB_DIR=$PREFIX/lib
 export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
-
-# Alias for updating and upgrading packages
-alias pkgup="pkg update && pkg upgrade"
 ' >> ~/.bashrc
 
 source ~/.bashrc
@@ -224,42 +221,17 @@ fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
-pip_operation_with_retries() {
-    local operation=$1
-    shift
-    local max_attempts=3
-    local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if pip "$operation" "$@"; then
-            return 0
-        else
-            log "pip $operation failed. Attempt $attempt of $max_attempts."
-            if [ $attempt -lt $max_attempts ]; then
-                log "Retrying in 5 seconds..."
-                sleep 5
-            fi
-            ((attempt++))
-        fi
-    done
-    return 1
-}
+log "Installing required Python packages..."
+pip install --upgrade pip
 
-# Set environment variables for compilation
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
-export OPENSSL_INCLUDE_DIR=$PREFIX/include
-export OPENSSL_LIB_DIR=$PREFIX/lib
-export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
 
-log "Installing required Python packages..."
-if ! pip_operation_with_retries install --no-cache-dir \
-    gevent \
-    pycryptodome \
-    cryptography \
-    pyOpenSSL; then
-    log_error "Failed to install required Python packages. Please check your internet connection and try again."
-    exit 1
-fi
+pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
+
+# Install cryptography and pyOpenSSL
+CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography || log_error "Failed to install cryptography"
+pip install pyOpenSSL || log_error "Failed to install pyOpenSSL"
 
 # Verify installations
 log "Verifying installations..."
@@ -269,7 +241,7 @@ chmod -R u+rwX "$ZERONET_DIR"
 
 if [ -f requirements.txt ]; then
     chmod 644 requirements.txt
-    if ! pip_operation_with_retries install -r requirements.txt; then
+    if ! pip install -r requirements.txt; then
         log_error "Failed to install from requirements.txt"
         exit 1
     fi
