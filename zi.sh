@@ -82,12 +82,12 @@ done
 
 log "Installing and building OpenSSL..."
 cd ~
-curl -O https://www.openssl.org/source/openssl-1.1.1k.tar.gz || log_error "Failed to download OpenSSL source"
-tar xzf openssl-1.1.1k.tar.gz || log_error "Failed to extract OpenSSL source"
-cd openssl-1.1.1k
+curl -O https://www.openssl.org/source/openssl-1.1.1l.tar.gz || log_error "Failed to download OpenSSL source"
+tar xzf openssl-1.1.1l.tar.gz || log_error "Failed to extract OpenSSL source"
+cd openssl-1.1.1l
 
 # Configure OpenSSL for Termux
-./Configure linux-aarch64 no-shared \
+./Configure linux-aarch64 shared \
     --prefix=$PREFIX \
     --openssldir=$PREFIX/etc/ssl \
     || log_error "Failed to configure OpenSSL"
@@ -97,7 +97,7 @@ make -j$(nproc) || log_error "Failed to build OpenSSL"
 make install_sw || log_error "Failed to install OpenSSL"
 
 cd ~
-rm -rf openssl-1.1.1k openssl-1.1.1k.tar.gz
+rm -rf openssl-1.1.1l openssl-1.1.1l.tar.gz
 
 # Add environment setup to .bashrc
 echo '
@@ -246,14 +246,14 @@ export LDFLAGS="-L$PREFIX/lib"
 
 pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
-# Install cryptography with Rust
-log "Installing cryptography with Rust..."
-CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography || {
-    log "Failed to install cryptography with CRYPTOGRAPHY_DONT_BUILD_RUST=1. Trying without this flag..."
-    pip install cryptography
-} || log_error "Failed to install cryptography"
-
-pip install pyOpenSSL || log_error "Failed to install pyOpenSSL"
+# Install cryptography and pyOpenSSL
+log "Installing cryptography and pyOpenSSL..."
+pip uninstall -y cryptography pyOpenSSL
+pip install cryptography==3.4.7 pyOpenSSL==20.0.1 || {
+    log "Failed to install specific versions. Attempting to build cryptography from source..."
+    CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install --no-binary :all: cryptography
+    pip install pyOpenSSL
+} || log_error "Failed to install cryptography and pyOpenSSL"
 
 # Verify installations
 log "Verifying installations..."
@@ -377,10 +377,6 @@ EOL
 create_zeronet_conf
 get_zeronet_port
 configure_tor
-
-log "Starting Tor service..."
-tor -f $HOME/.tor/torrc &
-TOR_PID=$!
 
 log "Starting Tor service..."
 tor -f $HOME/.tor/torrc &
