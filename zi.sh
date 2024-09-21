@@ -222,8 +222,21 @@ fi
 source "$ZERONET_DIR/venv/bin/activate"
 
 log "Installing Rust..."
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
+pkg install -y rust || log_error "Failed to install Rust"
+
+# Ensure Rust binaries are in PATH
+echo 'export PATH=$PATH:$HOME/.cargo/bin' >> $HOME/.bashrc
+source $HOME/.bashrc
+
+log "Rust installation completed. Verifying installation..."
+if ! command -v rustc &> /dev/null; then
+    log_error "Rust installation failed. 'rustc' command not found."
+fi
+if ! command -v cargo &> /dev/null; then
+    log_error "Rust installation failed. 'cargo' command not found."
+fi
+
+log "Rust installed successfully."
 
 log "Installing required Python packages..."
 pip install --upgrade pip
