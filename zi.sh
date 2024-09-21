@@ -51,7 +51,7 @@ required_packages=(
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
-    rust openssl
+    rust openssl openssl-tool  # Added openssl-tool here
 )
 
 install_package() {
@@ -81,7 +81,6 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-# Using OpenSSL provided by Termux
 log "Using OpenSSL provided by Termux"
 
 # Ensure environment variables are correctly set
@@ -219,11 +218,11 @@ export LDFLAGS="-L$PREFIX/lib"
 export LD_LIBRARY_PATH="$PREFIX/lib"
 
 # Install cryptography without suppressing Rust components
-pip install gevent pycryptodome cryptography pyOpenSSL || log_error "Failed to install required Python packages"
+pip install gevent pycryptodome cryptography pyOpenSSL coincurve || log_error "Failed to install required Python packages"
 
 # Verify installations
 log "Verifying installations..."
-python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+python -c "import gevent; import Crypto; import cryptography; import OpenSSL; import coincurve; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 
 chmod -R u+rwX "$ZERONET_DIR"
 
@@ -263,33 +262,24 @@ mkdir -p /data/data/com.termux/files/usr/var/log/
 update_trackers() {
     log "Updating trackers list..."
     TRACKERS_FILE="$ZERONET_DIR/data/trackers.json"
-    trackers_urls=(
-        "https://cf.trackerslist.com/best.txt"
-        "https://bitbucket.org/xiu2/trackerslistcollection/raw/master/best.txt"
-        "https://cdn.jsdelivr.net/gh/XIU2/TrackersListCollection/best.txt"
-        "https://fastly.jsdelivr.net/gh/XIU2/TrackersListCollection/best.txt"
-        "https://gcore.jsdelivr.net/gh/XIU2/TrackersListCollection/best.txt"
-        "https://cdn.statically.io/gh/XIU2/TrackersListCollection/best.txt"
-        "https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/best.txt"
-    )
+    trackers_url="https://trackerslist.com/best_aria2.txt"  # Updated to a reliable source
     mkdir -p "$(dirname "$TRACKERS_FILE")"
 
-    for tracker_url in "${trackers_urls[@]}"; do
-        log "Attempting to download tracker list from $tracker_url..."
-        if curl -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
-            log "Successfully downloaded tracker list from $tracker_url"
-            return
-        else
-            log "Failed to download from $tracker_url."
-        fi
-    done
-    log_error "Failed to download from any URL. Retrying in 5 seconds..."
-    sleep 5
+    if curl -s -f "$trackers_url" -o "$TRACKERS_FILE"; then
+        log "Successfully downloaded tracker list from $trackers_url"
+    else
+        log_error "Failed to download tracker list from $trackers_url."
+    fi
+
+    # Ensure trackers.json is not empty
+    if [ ! -s "$TRACKERS_FILE" ]; then
+        log_error "Trackers list is empty after download."
+    fi
 }
 
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-    
+
     cat > "$conf_file" << EOL
 [global]
 data_dir = $ZERONET_DIR/data
@@ -310,18 +300,21 @@ get_zeronet_port() {
     cd $ZERONET_DIR && . ./venv/bin/activate
     python zeronet.py --config_file $ZERONET_DIR/zeronet.conf > zeronet_output.log 2>&1 &
     TEMP_ZERONET_PID=$!
-    
-    # Wait until zeronet.conf is generated or timeout after 60 seconds
+
+    # Wait until zeronet.conf is updated with fileserver_port or timeout after 60 seconds
     timeout=60
     elapsed=0
-    while [ ! -f "$ZERONET_DIR/zeronet.conf" ] && [ $elapsed -lt $timeout ]; do
+    while [ $elapsed -lt $timeout ]; do
+        if grep -q 'fileserver_port' "$ZERONET_DIR/zeronet.conf"; then
+            break
+        fi
         sleep 1
         elapsed=$((elapsed+1))
     done
 
-    if [ ! -f "$ZERONET_DIR/zeronet.conf" ]; then
+    if ! grep -q 'fileserver_port' "$ZERONET_DIR/zeronet.conf"; then
         kill $TEMP_ZERONET_PID
-        log_error "zeronet.conf was not generated after $timeout seconds."
+        log_error "zeronet.conf was not updated with fileserver_port after $timeout seconds."
         exit 1
     fi
 
@@ -354,6 +347,7 @@ EOL
     log "Tor configuration created at $HOME/.tor/torrc"
 }
 
+update_trackers
 create_zeronet_conf
 get_zeronet_port
 configure_tor
@@ -413,7 +407,7 @@ start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
     python zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
-    
+
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID \$ZERONET_PID" --ongoing
@@ -429,9 +423,7 @@ else
     log "Please open Termux:Boot once since the last fresh start of Termux, then run this script again to set up auto-start."
 fi
 
-log "Starting ZeroNet..."
 start_zeronet() {
-    update_trackers
     cd $ZERONET_DIR
     . ./venv/bin/activate
 
@@ -448,6 +440,7 @@ start_zeronet() {
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
 }
 
+log "Starting ZeroNet..."
 start_zeronet
 
 if ! ps -p $ZERONET_PID > /dev/null; then
@@ -455,6 +448,8 @@ if ! ps -p $ZERONET_PID > /dev/null; then
     termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
     exit 1
 fi
+
+log "ZeroNet is running. You can access it at http://127.0.0.1:43110"
 
 view_log() {
     termux-dialog confirm -i "View last 50 lines of log?" -t "View Log"
@@ -520,11 +515,8 @@ check_content_loop &
 CONTENT_CHECK_PID=$!
 
 while true; do
-    ACTION=$(termux-dialog sheet -v "Edit ZeroNet File,View Log,Restart ZeroNet,Check for New Content,Exit" -t "ZeroNet Management")
+    ACTION=$(termux-dialog sheet -v "View Log,Restart ZeroNet,Check for New Content,Exit" -t "ZeroNet Management")
     case $ACTION in
-        *"Edit ZeroNet File"*)
-            edit_zeronet_file
-            ;;
         *"View Log"*)
             view_log
             ;;
