@@ -159,7 +159,10 @@ pip download coincurve
 # Extract the source code
 coincurve_archive=$(ls coincurve-*.tar.gz)
 tar -xzf "$coincurve_archive"
-cd coincurve-*
+
+# Get the exact directory name of coincurve
+coincurve_dir=$(tar -tzf "$coincurve_archive" | head -1 | cut -f1 -d"/")
+cd "$coincurve_dir"
 
 # Apply patch
 sed -i 's/_Py_NoneStruct/Py_None/g' coincurve/_libsecp256k1.pyx
@@ -170,8 +173,8 @@ pip install .
 cd ..
 
 # Clean up
-rm -rf coincurve-*
-rm coincurve-*.tar.gz
+rm -rf "$coincurve_dir"
+rm "$coincurve_archive"
 
 # Verify installations
 log "Verifying installations..."
