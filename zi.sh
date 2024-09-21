@@ -308,9 +308,11 @@ update_trackers() {
     )
     mkdir -p "$(dirname "$TRACKERS_FILE")"
 
+    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
-        if curl -s -f "$tracker_url" -o trackers_temp.txt; then
+        if curl -A "$user_agent" -s -f "$tracker_url" -o trackers_temp.txt; then
             log "Successfully downloaded tracker list from $tracker_url"
             # Convert the plain text tracker list to JSON format
             python -c "
