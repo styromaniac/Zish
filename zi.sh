@@ -46,8 +46,15 @@ update_mirrors || exit 1
 
 pkg upgrade -y
 
+# Install prerequisites
+pkg install -y gnupg
+
+# Add the third-party repository (its-pointless repo) for Python 3.10
+curl -fsSL https://its-pointless.github.io/setup-pointless-repo.sh | bash
+
+# Install required packages
 required_packages=(
-    termux-tools termux-keyring python
+    termux-tools termux-keyring python310
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl
@@ -100,81 +107,9 @@ mkdir -p "$ZERONET_DIR"
 WORK_DIR="$(mktemp -d)"
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 
-log "Please provide the Git clone URL or path to the ZeroNet ZIP file (Git URL, .zip, or .tar.gz):"
-read -r zeronet_source
-
-download_with_retries() {
-    local url=$1
-    local output_file=$2
-
-    while true; do
-        log "Attempting to download $url..."
-        if curl -s -f -L "$url" -o "$output_file"; then
-            log "Successfully downloaded $url"
-            break
-        else
-            log "Failed to download $url. Retrying in 5 seconds..."
-            rm -f "$output_file"
-            sleep 5
-        fi
-    done
-}
-
-git_clone_with_retries() {
-    local repo_url=$1
-    local target_dir=$2
-
-    while true; do
-        log "Attempting to clone $repo_url..."
-        if git clone "$repo_url" "$target_dir"; then
-            log "Successfully cloned $repo_url"
-            break
-        else
-            log "Failed to clone $repo_url. Retrying in 5 seconds..."
-            rm -rf "$target_dir"
-            sleep 5
-        fi
-    done
-}
-
-if [[ "$zeronet_source" == http*".git" ]]; then
-    git_clone_with_retries "$zeronet_source" "zeronet_repo"
-    base_dir="$WORK_DIR/zeronet_repo"
-elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".tar.gz" ]]; then
-    download_with_retries "$zeronet_source" "zeronet_archive"
-    if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip $zeronet_source"; exit 1; }
-    elif [[ "$zeronet_source" == *.tar.gz ]]; then
-        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract $zeronet_source"; exit 1; }
-    fi
-    rm zeronet_archive
-    zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
-    if [ -z "$zeronet_py_path" ]; then
-        log_error "zeronet.py not found after extraction."
-        exit 1
-    fi
-    base_dir=$(dirname "$zeronet_py_path")
-elif [ -f "$zeronet_source" ]; then
-    cp "$zeronet_source" zeronet_archive
-    if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
-    elif [[ "$zeronet_source" == *.tar.gz ]]; then
-        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
-    else
-        log_error "Unsupported file format. Please provide a .zip or .tar.gz file."
-        exit 1
-    fi
-    rm zeronet_archive
-    zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
-    if [ -z "$zeronet_py_path" ]; then
-        log_error "zeronet.py not found after extraction."
-        exit 1
-    fi
-    base_dir=$(dirname "$zeronet_py_path")
-else
-    log_error "Invalid input. Please provide a valid Git URL, ZIP URL, or file path."
-    exit 1
-fi
+log "Cloning ZeroNet repository..."
+git clone https://github.com/HelloZeroNet/ZeroNet.git zeronet_repo || { log_error "Failed to clone ZeroNet repository"; exit 1; }
+base_dir="$WORK_DIR/zeronet_repo"
 
 log "Adjusting ownership of files before moving..."
 chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
@@ -192,7 +127,7 @@ fi
 cd "$ZERONET_DIR" || exit 1
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python -m venv "$ZERONET_DIR/venv"
+    python3.10 -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
@@ -216,14 +151,11 @@ export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
 export LD_LIBRARY_PATH="$PREFIX/lib"
 
-# Install cryptography without suppressing Rust components
-pip install gevent pycryptodome cryptography pyOpenSSL || log_error "Failed to install required Python packages"
+pip install gevent pycryptodome cryptography pyOpenSSL
 
-# Fix for coincurve issue: Install coincurve from source
-log "Installing coincurve from source to fix '_Py_NoneStruct' issue..."
-pip uninstall -y coincurve
-pip install --upgrade cffi
-pip install --no-binary coincurve coincurve || log_error "Failed to install coincurve from source"
+# Install coincurve compatible with Python 3.10
+log "Installing coincurve..."
+pip install coincurve || log_error "Failed to install coincurve"
 
 # Verify installations
 log "Verifying installations..."
@@ -235,26 +167,6 @@ if [ -f requirements.txt ]; then
     chmod 644 requirements.txt
     if ! pip install -r requirements.txt; then
         log_error "Failed to install from requirements.txt"
-        exit 1
-    fi
-fi
-
-mkdir -p ./data
-chmod -R u+rwX ./data
-
-log "Please provide URL, path to users.json, or press Enter to skip:"
-read -r users_json_source
-
-if [[ "$users_json_source" == http* ]]; then
-    mkdir -p data
-    download_with_retries "$users_json_source" "data/users.json"
-elif [ -n "$users_json_source" ]; then
-    if [ -f "$users_json_source" ]; then
-        mkdir -p data
-        cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
-        log "users.json copied successfully from $users_json_source"
-    else
-        log_error "File not found: $users_json_source"
         exit 1
     fi
 fi
@@ -410,7 +322,7 @@ start_tor() {
 
 start_zeronet() {
     cd "\$ZERONET_DIR"
-    . ./venv/bin/activate
+    source ./venv/bin/activate
     python zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
 
     ZERONET_PID=\$!
@@ -430,7 +342,7 @@ fi
 
 start_zeronet() {
     cd $ZERONET_DIR
-    . ./venv/bin/activate
+    source ./venv/bin/activate
 
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
