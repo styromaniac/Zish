@@ -148,18 +148,30 @@ pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
 
-# Try to install a specific older version of cryptography using a pre-built wheel
-if pip install cryptography==2.6.1 pyOpenSSL==19.0.0 --only-binary=:all:; then
-    log "Successfully installed cryptography 2.6.1 and pyOpenSSL 19.0.0 using pre-built wheels"
-else
-    log "Failed to install using pre-built wheels. Attempting to install with pip's default behavior..."
-    if CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography==2.6.1 pyOpenSSL==19.0.0; then
-        log "Successfully installed cryptography 2.6.1 and pyOpenSSL 19.0.0"
-    else
-        log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
-        exit 1
-    fi
-fi
+install_cryptography_and_pyopenssl() {
+    local versions=(
+        "cryptography pyOpenSSL"
+        "cryptography==3.4.7 pyOpenSSL==20.0.1"
+        "cryptography==3.3.2 pyOpenSSL==19.1.0"
+        "cryptography==2.9.2 pyOpenSSL==19.0.0"
+        "cryptography==2.6.1 pyOpenSSL==19.0.0"
+    )
+
+    for version in "${versions[@]}"; do
+        log "Attempting to install: $version"
+        if CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install $version; then
+            log "Successfully installed $version"
+            return 0
+        else
+            log "Failed to install $version, trying next version..."
+        fi
+    done
+
+    log_error "Failed to install any compatible version of cryptography and pyOpenSSL"
+    return 1
+}
+
+install_cryptography_and_pyopenssl || exit 1
 
 # Install dependencies separately
 pip install cffi==1.14.6 six idna
