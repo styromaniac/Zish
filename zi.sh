@@ -6,6 +6,10 @@ ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
 
+# Define Tor port variables
+TOR_PROXY_PORT=49050
+TOR_CONTROL_PORT=49051
+
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
@@ -336,12 +340,23 @@ generate_random_port() {
     log "Generating a random, collision-free port number for ZeroNet..."
 
     # Valid port range: 1025-65535 (non-privileged ports)
-    RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
+    # Exclude Tor ports dynamically using variables
+    EXCLUDED_PORTS=($TOR_PROXY_PORT $TOR_CONTROL_PORT)
 
-    # Check if the port is in use
-    while netstat -tuln | grep -q ":$RANDOM_PORT "; do
-        log "Port $RANDOM_PORT is in use. Generating a new port..."
+    while true; do
         RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
+        # Check if the port is in the excluded list
+        if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
+            log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
+            continue
+        fi
+        # Check if the port is in use
+        if netstat -tuln | grep -q ":$RANDOM_PORT "; then
+            log "Port $RANDOM_PORT is in use. Generating a new port..."
+            continue
+        fi
+        # Port is acceptable
+        break
     done
 
     log "Selected port $RANDOM_PORT for ZeroNet."
@@ -359,8 +374,8 @@ data_dir = $ZERONET_DIR/data
 log_dir = /data/data/com.termux/files/usr/var/log/zeronet
 ui_ip = 127.0.0.1
 ui_port = 43110
-tor_controller = 127.0.0.1:49051
-tor_proxy = 127.0.0.1:49050
+tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
+tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
 trackers_file = $ZERONET_DIR/data/trackers.json
 language = en
 tor = always
@@ -376,8 +391,8 @@ configure_tor() {
     mkdir -p /data/data/com.termux/files/home/.tor/ZeroNet
 
     cat > $HOME/.tor/torrc << EOL
-SocksPort 49050
-ControlPort 49051
+SocksPort $TOR_PROXY_PORT
+ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
 HiddenServiceDir /data/data/com.termux/files/home/.tor/ZeroNet
 HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
