@@ -1,8 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Removed 'set -e' to prevent the script from exiting on non-zero exit statuses
-# set -e
-
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
@@ -83,7 +80,6 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-# Removed OpenSSL compilation and installation from source
 log "Installing OpenSSL from Termux repository..."
 pkg install -y openssl || log_error "Failed to install OpenSSL from repository"
 
@@ -95,13 +91,8 @@ export LDFLAGS="-L$PREFIX/lib"
 
 pip install --upgrade pip setuptools wheel
 
-# Install greenlet separately
 pip install --no-deps greenlet || log_error "Failed to install greenlet"
-
-# Install other packages
 pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
-
-# Install cryptography and pyOpenSSL with Rust compiler
 pip install cryptography pyOpenSSL cffi six idna || log_error "Failed to install cryptography and pyOpenSSL"
 
 log "Verifying installations..."
@@ -251,9 +242,10 @@ chmod -R u+rwX ./data
 
 mkdir -p $PREFIX/var/log/
 
+TRACKERS_FILE="$ZERONET_DIR/trackers.txt"
+
 update_trackers() {
     log "Updating trackers list..."
-    TRACKERS_FILE="$ZERONET_DIR/data/trackers.json"
     trackers_urls=(
         "https://cf.trackerslist.com/best.txt"
         "https://bitbucket.org/xiu2/trackerslistcollection/raw/master/best.txt"
@@ -263,45 +255,21 @@ update_trackers() {
         "https://cdn.statically.io/gh/XIU2/TrackersListCollection/best.txt"
         "https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/best.txt"
     )
-    mkdir -p "$(dirname "$TRACKERS_FILE")"
 
     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
-        if curl -A "$user_agent" -s -f "$tracker_url" -o trackers_temp.txt; then
+        if curl -A "$user_agent" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
             log "Successfully downloaded tracker list from $tracker_url"
-            python3 -c "
-import json
-with open('trackers_temp.txt', 'r') as f:
-    trackers = [line.strip() for line in f if line.strip()]
-with open('$TRACKERS_FILE', 'w') as f:
-    json.dump({'shared': trackers}, f, indent=2)
-"
-            rm trackers_temp.txt
-            log "Trackers list updated in $TRACKERS_FILE"
-            chmod 444 "$TRACKERS_FILE"
-            break
+            chmod 644 "$TRACKERS_FILE"
+            return
         else
             log "Failed to download from $tracker_url."
         fi
     done
-
-    # Download and extract the ZIP file to ~/apps/zeronet/data
-    ZERONET_INTERNAL_ZIP="https://0net-preview.com/ZeroNet-Internal/Zip?address=15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
-    log "Downloading and extracting ZeroNet-Internal ZIP to $ZERONET_DIR/data..."
-
-    zip_file="$ZERONET_DIR/data/zeronet_internal.zip"
-
-    if curl -L "$ZERONET_INTERNAL_ZIP" -o "$zip_file"; then
-        log "Successfully downloaded ZeroNet-Internal ZIP file"
-        unzip -o "$zip_file" -d "$ZERONET_DIR/data" || { log_error "Failed to extract ZeroNet-Internal ZIP"; exit 1; }
-        rm "$zip_file"
-        log "Successfully extracted ZeroNet-Internal ZIP file to $ZERONET_DIR/data"
-    else
-        log_error "Failed to download ZeroNet-Internal ZIP file"
-        exit 1
-    fi
+    log_error "Failed to download from any URL. Retrying in 5 seconds..."
+    sleep 5
 }
 
 generate_random_port() {
@@ -338,7 +306,7 @@ ui_ip = 127.0.0.1
 ui_port = 43110
 tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
 tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
-trackers_file = $ZERONET_DIR/data/trackers.json
+trackers_file = $TRACKERS_FILE
 language = en
 tor = always
 fileserver_port = $FILESERVER_PORT
@@ -375,7 +343,6 @@ TOR_PID=$!
 
 log "Waiting for Tor to start and generate the hidden service..."
 
-# Implementing a loop to wait for the hidden service to be created
 for i in {1..30}; do
     if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
         break
@@ -471,6 +438,28 @@ start_zeronet() {
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
 }
 
+start_zeronet
+
+log "ZeroNet started. Waiting 10 seconds before further operations..."
+sleep 10
+
+log "Shutting down ZeroNet via API..."
+curl -X POST http://127.0.0.1:43110/ZeroNet-Internal/Shutdown
+
+log "Downloading and extracting ZIP file..."
+ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+ZIP_DIR="$ZERONET_DIR/data/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+
+mkdir -p "$ZIP_DIR"
+curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"
+unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
+rm "$ZIP_DIR/content.zip"
+
+log "ZIP file extracted to $ZIP_DIR"
+
+update_trackers
+
+log "Restarting ZeroNet..."
 start_zeronet
 
 # Adjusted the process check using pgrep
