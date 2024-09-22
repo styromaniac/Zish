@@ -139,6 +139,10 @@ log "Installing required Python packages..."
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
 
+# Install greenlet separately
+pip install --no-deps greenlet || log_error "Failed to install greenlet"
+
+# Install other packages
 pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
 log "Installing cryptography and pyOpenSSL..."
