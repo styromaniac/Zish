@@ -101,18 +101,75 @@ yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from r
 
 log "OpenSSL installation completed."
 
-log "Installing required Python packages..."
-export CFLAGS="-I$PREFIX/include"
-export LDFLAGS="-L$PREFIX/lib"
+install_python_packages() {
+    log "Installing required Python packages..."
+    export CFLAGS="-I$PREFIX/include"
+    export LDFLAGS="-L$PREFIX/lib"
 
-pip install --upgrade pip setuptools wheel
+    pip install --upgrade pip setuptools wheel
 
-pip install --no-deps greenlet || log_error "Failed to install greenlet"
-pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
-pip install cryptography pyOpenSSL cffi six idna || log_error "Failed to install cryptography and pyOpenSSL"
+    MAX_RETRIES=3
+    RETRY_DELAY=10
 
-log "Verifying installations..."
-python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    install_package_with_retry() {
+        local package=$1
+        local retries=0
+        while [ $retries -lt $MAX_RETRIES ]; do
+            if pip install --no-deps $package; then
+                log "Successfully installed $package"
+                return 0
+            else
+                retries=$((retries + 1))
+                log "Failed to install $package. Attempt $retries of $MAX_RETRIES."
+                if [ $retries -lt $MAX_RETRIES ]; then
+                    log "Retrying in $RETRY_DELAY seconds..."
+                    sleep $RETRY_DELAY
+                    # Kill any hanging processes
+                    pkill -f "pip install"
+                    # Clean up temporary directories
+                    rm -rf /tmp/pip-*
+                fi
+            fi
+        done
+        log_error "Failed to install $package after $MAX_RETRIES attempts."
+        return 1
+    }
+
+    # Try different installation methods
+    install_package_with_fallbacks() {
+        local package=$1
+        if ! install_package_with_retry $package; then
+            log "Attempting to install $package with binary distribution..."
+            if ! pip install --only-binary=:all: $package; then
+                if [ "$package" = "cryptography" ]; then
+                    log "Attempting to install cryptography without Rust..."
+                    if ! CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography; then
+                        log_error "All installation methods failed for $package"
+                        return 1
+                    fi
+                else
+                    log_error "All installation methods failed for $package"
+                    return 1
+                fi
+            fi
+        fi
+        return 0
+    }
+
+    install_package_with_fallbacks greenlet || return 1
+    install_package_with_fallbacks gevent || return 1
+    install_package_with_fallbacks pycryptodome || return 1
+    install_package_with_fallbacks cryptography || return 1
+    install_package_with_fallbacks pyOpenSSL || return 1
+    install_package_with_fallbacks cffi || return 1
+    install_package_with_fallbacks six || return 1
+    install_package_with_fallbacks idna || return 1
+
+    log "Verifying installations..."
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+}
+
+install_python_packages || exit 1
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
