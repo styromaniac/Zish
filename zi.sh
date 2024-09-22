@@ -149,12 +149,12 @@ log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
 
 # Try to install a specific older version of cryptography using a pre-built wheel
-if pip install cryptography==2.9.2 pyOpenSSL==19.1.0 --only-binary=:all:; then
-    log "Successfully installed cryptography 2.9.2 and pyOpenSSL 19.1.0 using pre-built wheels"
+if pip install cryptography==2.6.1 pyOpenSSL==19.0.0 --only-binary=:all:; then
+    log "Successfully installed cryptography 2.6.1 and pyOpenSSL 19.0.0 using pre-built wheels"
 else
     log "Failed to install using pre-built wheels. Attempting to install with pip's default behavior..."
-    if CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography==2.9.2 pyOpenSSL==19.1.0; then
-        log "Successfully installed cryptography 2.9.2 and pyOpenSSL 19.1.0"
+    if CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography==2.6.1 pyOpenSSL==19.0.0; then
+        log "Successfully installed cryptography 2.6.1 and pyOpenSSL 19.0.0"
     else
         log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
         exit 1
@@ -162,7 +162,7 @@ else
 fi
 
 # Install dependencies separately
-pip install cffi six idna
+pip install cffi==1.14.6 six idna
 
 log "Verifying installations..."
 python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
