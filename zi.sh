@@ -22,7 +22,7 @@ log_error() {
 }
 
 # User prompts
-log "Please provide the Git clone URL or path to the ZeroNet ZIP file (Git URL, .zip, or .tar.gz):"
+log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
 read -r zeronet_source
 
 log "Please provide URL, path to users.json, or press Enter to skip:"
@@ -320,6 +320,7 @@ trackers_file = $TRACKERS_FILE
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
+ip = 
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
@@ -371,6 +372,16 @@ log "Retrieving onion address..."
 if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
     ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
     log "Onion address: $ONION_ADDRESS"
+
+    # Update ZeroNet configuration with the onion address
+    log "Updating ZeroNet configuration with onion address..."
+    sed -i "s/^ip = .*/ip = ${ONION_ADDRESS%$'\n'}/" "$ZERONET_DIR/zeronet.conf"
+    if [ $? -eq 0 ]; then
+        log "Successfully updated ZeroNet configuration with onion address"
+else
+    log_error "Failed to update ZeroNet configuration with onion address"
+    exit 1
+fi
 else
     log_error "Failed to retrieve onion address. Tor hidden service may not have been created properly."
     log "Contents of the hidden service directory:"
