@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-set -e
+# Removed 'set -e' to prevent the script from exiting on non-zero exit statuses
+# set -e
 
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
@@ -52,7 +53,7 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq
+    clang make termux-api tor perl jq rust openssl net-tools
 )
 
 install_package() {
@@ -82,62 +83,17 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-log "Installing and building the latest stable OpenSSL..."
-cd ~
+# Removed OpenSSL compilation and installation from source
+log "Installing OpenSSL from Termux repository..."
+pkg install -y openssl || log_error "Failed to install OpenSSL from repository"
 
-# Fetch the latest stable release version from GitHub API
-OPENSSL_VERSION=$(curl -s https://api.github.com/repos/openssl/openssl/releases | jq -r '[.[] | select(.prerelease == false and .draft == false)][0].tag_name')
-
-if [ -z "$OPENSSL_VERSION" ] || [ "$OPENSSL_VERSION" == "null" ]; then
-    log_error "Failed to determine the latest stable OpenSSL version"
-    exit 1
-fi
-
-log "Latest stable OpenSSL version: $OPENSSL_VERSION"
-
-# Download the latest stable version
-curl -L "https://github.com/openssl/openssl/archive/${OPENSSL_VERSION}.tar.gz" -o "openssl-${OPENSSL_VERSION}.tar.gz" || log_error "Failed to download OpenSSL source"
-tar xzf "openssl-${OPENSSL_VERSION}.tar.gz" || log_error "Failed to extract OpenSSL source"
-
-# Find the correct directory name after extraction
-OPENSSL_DIR=$(find . -maxdepth 1 -type d -name "openssl-*" | head -n 1)
-
-if [ -z "$OPENSSL_DIR" ]; then
-    log_error "Failed to find OpenSSL directory after extraction"
-    exit 1
-fi
-
-cd "$OPENSSL_DIR"
-
-# Configure OpenSSL for Termux
-./Configure linux-aarch64 shared \
-    --prefix=$PREFIX \
-    --openssldir=$PREFIX/etc/ssl \
-    || log_error "Failed to configure OpenSSL"
-
-# Build and install
-make -j$(nproc) || log_error "Failed to build OpenSSL"
-make install_sw || log_error "Failed to install OpenSSL"
-
-cd ~
-rm -rf "$OPENSSL_DIR" "openssl-${OPENSSL_VERSION}.tar.gz"
-
-# Add environment setup to .bashrc
-echo "
-# OpenSSL environment setup
-export OPENSSL_DIR=\$PREFIX
-export OPENSSL_INCLUDE_DIR=\$PREFIX/include
-export OPENSSL_LIB_DIR=\$PREFIX/lib
-export LD_LIBRARY_PATH=\$PREFIX/lib:\$LD_LIBRARY_PATH
-" >> ~/.bashrc
-
-source ~/.bashrc
-
-log "OpenSSL $OPENSSL_VERSION installation completed."
+log "OpenSSL installation completed."
 
 log "Installing required Python packages..."
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
+
+pip install --upgrade pip setuptools wheel
 
 # Install greenlet separately
 pip install --no-deps greenlet || log_error "Failed to install greenlet"
@@ -145,39 +101,11 @@ pip install --no-deps greenlet || log_error "Failed to install greenlet"
 # Install other packages
 pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
-log "Installing cryptography and pyOpenSSL..."
-pip uninstall -y cryptography pyOpenSSL
-
-install_cryptography_and_pyopenssl() {
-    local versions=(
-        "cryptography pyOpenSSL"
-        "cryptography==3.4.7 pyOpenSSL==20.0.1"
-        "cryptography==3.3.2 pyOpenSSL==19.1.0"
-        "cryptography==2.9.2 pyOpenSSL==19.0.0"
-        "cryptography==2.6.1 pyOpenSSL==19.0.0"
-    )
-
-    for version in "${versions[@]}"; do
-        log "Attempting to install: $version"
-        if CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install $version; then
-            log "Successfully installed $version"
-            return 0
-        else
-            log "Failed to install $version, trying next version..."
-        fi
-    done
-
-    log_error "Failed to install any compatible version of cryptography and pyOpenSSL"
-    return 1
-}
-
-install_cryptography_and_pyopenssl || exit 1
-
-# Install dependencies separately
-pip install cffi==1.14.6 six idna
+# Install cryptography and pyOpenSSL with Rust compiler
+pip install cryptography pyOpenSSL cffi six idna || log_error "Failed to install cryptography and pyOpenSSL"
 
 log "Verifying installations..."
-python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -188,7 +116,7 @@ fi
 
 mkdir -p "$ZERONET_DIR"
 
-WORK_DIR="$(mktemp -d)"
+WORK_DIR="$(mktemp -d "$HOME/tmp.XXXXXX")"
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 
 log "Please provide the Git clone URL or path to the ZeroNet ZIP file (Git URL, .zip, or .tar.gz):"
@@ -283,7 +211,7 @@ fi
 cd "$ZERONET_DIR" || exit 1
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python -m venv "$ZERONET_DIR/venv"
+    python3 -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
@@ -321,7 +249,7 @@ fi
 mkdir -p ./data
 chmod -R u+rwX ./data
 
-mkdir -p /data/data/com.termux/files/usr/var/log/
+mkdir -p $PREFIX/var/log/
 
 update_trackers() {
     log "Updating trackers list..."
@@ -343,7 +271,7 @@ update_trackers() {
         log "Attempting to download tracker list from $tracker_url..."
         if curl -A "$user_agent" -s -f "$tracker_url" -o trackers_temp.txt; then
             log "Successfully downloaded tracker list from $tracker_url"
-            python -c "
+            python3 -c "
 import json
 with open('trackers_temp.txt', 'r') as f:
     trackers = [line.strip() for line in f if line.strip()]
@@ -387,11 +315,11 @@ generate_random_port() {
 
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-    
+
     cat > "$conf_file" << EOL
 [global]
 data_dir = $ZERONET_DIR/data
-log_dir = /data/data/com.termux/files/usr/var/log/zeronet
+log_dir = $PREFIX/var/log/zeronet
 ui_ip = 127.0.0.1
 ui_port = 43110
 tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
@@ -407,17 +335,17 @@ EOL
 configure_tor() {
     log "Configuring Tor..."
     mkdir -p $HOME/.tor
-    mkdir -p /data/data/com.termux/files/usr/var/log/tor
-    mkdir -p /data/data/com.termux/files/home/.tor/ZeroNet
+    mkdir -p $PREFIX/var/log/tor
+    mkdir -p $HOME/.tor/ZeroNet
 
     cat > $HOME/.tor/torrc << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
-HiddenServiceDir /data/data/com.termux/files/home/.tor/ZeroNet
+HiddenServiceDir $HOME/.tor/ZeroNet
 HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
-Log notice file /data/data/com.termux/files/usr/var/log/tor/notices.log
+Log notice file $PREFIX/var/log/tor/notices.log
 EOL
     log "Tor configuration created at $HOME/.tor/torrc"
 }
@@ -432,25 +360,32 @@ tor -f $HOME/.tor/torrc &
 TOR_PID=$!
 
 log "Waiting for Tor to start and generate the hidden service..."
-sleep 30
+
+# Implementing a loop to wait for the hidden service to be created
+for i in {1..30}; do
+    if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if kill -0 $TOR_PID 2>/dev/null; then
-    log "Tor process is still running after 30 seconds. Proceeding with hidden service setup."
+    log "Tor process is still running. Proceeding with hidden service setup."
 else
     log_error "Tor process is not running. There may have been an issue starting Tor."
     exit 1
 fi
 
 log "Retrieving onion address..."
-if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
-    ONION_ADDRESS=$(cat /data/data/com.termux/files/home/.tor/ZeroNet/hostname)
+if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
+    ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
     log "Onion address: $ONION_ADDRESS"
 else
     log_error "Failed to retrieve onion address. Tor hidden service may not have been created properly."
     log "Contents of the hidden service directory:"
-    ls -la /data/data/com.termux/files/home/.tor/ZeroNet
+    ls -la "$HOME/.tor/ZeroNet"
     log "Last 20 lines of Tor log:"
-    tail -n 20 /data/data/com.termux/files/usr/var/log/tor/notices.log
+    tail -n 20 "$PREFIX/var/log/tor/notices.log"
     exit 1
 fi
 
@@ -475,14 +410,20 @@ TORRC_FILE=$HOME/.tor/torrc
 
 start_tor() {
     tor -f "\$TORRC_FILE" &
-    sleep 30
+    # Wait until Tor is ready
+    for i in {1..30}; do
+        if [ -f "\$HOME/.tor/ZeroNet/hostname" ]; then
+            break
+        fi
+        sleep 1
+    done
 }
 
 start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
-    python zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
-    
+    python3 zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
+
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID \$ZERONET_PID" --ongoing
@@ -502,15 +443,15 @@ log "Starting ZeroNet..."
 start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
-    
+
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
         log "Renamed disabled-Bootstrapper to Bootstrapper"
     else
         log "disabled-Bootstrapper directory not found"
     fi
-    
-    python zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
+
+    python3 zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
@@ -518,7 +459,8 @@ start_zeronet() {
 
 start_zeronet
 
-if ! ps -p $ZERONET_PID > /dev/null; then
+# Adjusted the process check using pgrep
+if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
     termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
     exit 1
@@ -527,7 +469,7 @@ fi
 view_log() {
     termux-dialog confirm -i "View last 50 lines of log?" -t "View Log"
     if [ $? -eq 0 ]; then
-        LOG_CONTENT=$(tail -n 50 "/data/data/com.termux/files/usr/var/log/zeronet/debug.log")
+        LOG_CONTENT=$(tail -n 50 "$PREFIX/var/log/zeronet/debug.log")
         termux-dialog text -t "ZeroNet Log (last 50 lines)" -i "$LOG_CONTENT"
     fi
 }
@@ -558,7 +500,7 @@ check_for_new_content() {
 
     if [ $file_mod_time -gt $LAST_CHECKED_TIME ]; then
         log "New content detected on ZeroNet Conservancy homepage. Checking for new posts..."
-        local new_posts=$(python -c "
+        local new_posts=$(python3 -c "
 import json
 with open('$content_json', 'r') as f:
     data = json.load(f)
