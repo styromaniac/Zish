@@ -5,8 +5,6 @@ set -e
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
-
-# Define Tor port variables
 TOR_PROXY_PORT=49050
 TOR_CONTROL_PORT=49051
 
@@ -90,22 +88,18 @@ curl -O https://www.openssl.org/source/openssl-1.1.1l.tar.gz || log_error "Faile
 tar xzf openssl-1.1.1l.tar.gz || log_error "Failed to extract OpenSSL source"
 cd openssl-1.1.1l
 
-# Configure OpenSSL for Termux
 ./Configure linux-aarch64 shared \
     --prefix=$PREFIX \
     --openssldir=$PREFIX/etc/ssl \
     || log_error "Failed to configure OpenSSL"
 
-# Build and install
 make -j$(nproc) || log_error "Failed to build OpenSSL"
 make install_sw || log_error "Failed to install OpenSSL"
 
 cd ~
 rm -rf openssl-1.1.1l openssl-1.1.1l.tar.gz
 
-# Add environment setup to .bashrc
 echo '
-# OpenSSL environment setup
 export OPENSSL_DIR=$PREFIX
 export OPENSSL_INCLUDE_DIR=$PREFIX/include
 export OPENSSL_LIB_DIR=$PREFIX/lib
@@ -228,7 +222,6 @@ source "$ZERONET_DIR/venv/bin/activate"
 log "Installing Rust..."
 pkg install -y rust || log_error "Failed to install Rust"
 
-# Ensure Rust binaries are in PATH
 echo 'export PATH=$PATH:$HOME/.cargo/bin' >> $HOME/.bashrc
 source $HOME/.bashrc
 
@@ -250,7 +243,6 @@ export LDFLAGS="-L$PREFIX/lib"
 
 pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
-# Install cryptography and pyOpenSSL
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
 pip install cryptography==3.4.7 pyOpenSSL==20.0.1 || {
@@ -259,7 +251,6 @@ pip install cryptography==3.4.7 pyOpenSSL==20.0.1 || {
     pip install pyOpenSSL
 } || log_error "Failed to install cryptography and pyOpenSSL"
 
-# Verify installations
 log "Verifying installations..."
 python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 
@@ -318,7 +309,6 @@ update_trackers() {
         log "Attempting to download tracker list from $tracker_url..."
         if curl -A "$user_agent" -s -f "$tracker_url" -o trackers_temp.txt; then
             log "Successfully downloaded tracker list from $tracker_url"
-            # Convert the plain text tracker list to JSON format
             python -c "
 import json
 with open('trackers_temp.txt', 'r') as f:
@@ -328,46 +318,42 @@ with open('$TRACKERS_FILE', 'w') as f:
 "
             rm trackers_temp.txt
             log "Trackers list updated in $TRACKERS_FILE"
+            chmod 444 "$TRACKERS_FILE"
             return
         else
             log "Failed to download from $tracker_url."
         fi
     done
-    log_error "Failed to download from any URL."
+    log_error "Failed to download from any URL. Retrying in 5 seconds..."
+    sleep 5
 }
 
 generate_random_port() {
     log "Generating a random, collision-free port number for ZeroNet..."
 
-    # Valid port range: 1025-65535 (non-privileged ports)
-    # Exclude Tor ports dynamically using variables
     EXCLUDED_PORTS=($TOR_PROXY_PORT $TOR_CONTROL_PORT)
 
     while true; do
         RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
-        # Check if the port is in the excluded list
         if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
             log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
             continue
         fi
-        # Check if the port is in use
         if netstat -tuln | grep -q ":$RANDOM_PORT "; then
             log "Port $RANDOM_PORT is in use. Generating a new port..."
             continue
         fi
-        # Port is acceptable
         break
     done
 
     log "Selected port $RANDOM_PORT for ZeroNet."
-
-    export FILESERVER_PORT=$RANDOM_PORT
+    FILESERVER_PORT=$RANDOM_PORT
     log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
 }
 
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-
+    
     cat > "$conf_file" << EOL
 [global]
 data_dir = $ZERONET_DIR/data
@@ -402,7 +388,6 @@ EOL
     log "Tor configuration created at $HOME/.tor/torrc"
 }
 
-# Execute the functions in the new order
 update_trackers
 generate_random_port
 create_zeronet_conf
@@ -463,7 +448,7 @@ start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
     python zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
-
+    
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID \$ZERONET_PID" --ongoing
@@ -483,14 +468,14 @@ log "Starting ZeroNet..."
 start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
-
+    
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
         log "Renamed disabled-Bootstrapper to Bootstrapper"
     else
         log "disabled-Bootstrapper directory not found"
     fi
-
+    
     python zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
