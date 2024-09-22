@@ -281,13 +281,27 @@ with open('$TRACKERS_FILE', 'w') as f:
             rm trackers_temp.txt
             log "Trackers list updated in $TRACKERS_FILE"
             chmod 444 "$TRACKERS_FILE"
-            return
+            break
         else
             log "Failed to download from $tracker_url."
         fi
     done
-    log_error "Failed to download from any URL. Retrying in 5 seconds..."
-    sleep 5
+
+    # Download and extract the ZIP file to ~/apps/zeronet/data
+    ZERONET_INTERNAL_ZIP="https://0net-preview.com/ZeroNet-Internal/Zip?address=15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+    log "Downloading and extracting ZeroNet-Internal ZIP to $ZERONET_DIR/data..."
+
+    zip_file="$ZERONET_DIR/data/zeronet_internal.zip"
+
+    if curl -L "$ZERONET_INTERNAL_ZIP" -o "$zip_file"; then
+        log "Successfully downloaded ZeroNet-Internal ZIP file"
+        unzip -o "$zip_file" -d "$ZERONET_DIR/data" || { log_error "Failed to extract ZeroNet-Internal ZIP"; exit 1; }
+        rm "$zip_file"
+        log "Successfully extracted ZeroNet-Internal ZIP file to $ZERONET_DIR/data"
+    else
+        log_error "Failed to download ZeroNet-Internal ZIP file"
+        exit 1
+    fi
 }
 
 generate_random_port() {
