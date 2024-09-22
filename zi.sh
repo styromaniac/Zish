@@ -50,7 +50,7 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq rust openssl net-tools
+    clang make termux-api tor perl jq rust openssl-tool net-tools
 )
 
 install_package() {
@@ -81,7 +81,7 @@ for package in "${required_packages[@]}"; do
 done
 
 log "Installing OpenSSL from Termux repository..."
-pkg install -y openssl || log_error "Failed to install OpenSSL from repository"
+pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
 
 log "OpenSSL installation completed."
 
@@ -403,6 +403,7 @@ start_tor() {
 start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
+    export PATH=\$PATH:\$PREFIX/bin
     python3 zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
 
     ZERONET_PID=\$!
@@ -420,10 +421,21 @@ else
     log "Please open Termux:Boot once since the last fresh start of Termux, then run this script again to set up auto-start."
 fi
 
-log "Starting ZeroNet..."
+check_openssl() {
+    if command -v openssl >/dev/null 2>&1; then
+        log "OpenSSL is available. Version: $(openssl version)"
+    else
+        log_error "OpenSSL is not found in PATH. Please ensure it's installed."
+        exit 1
+    fi
+}
+
 start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
+
+    # Add Termux bin to PATH
+    export PATH=$PATH:$PREFIX/bin
 
     # Check for existing ZeroNet processes
     if pgrep -f "python3.*zeronet.py" > /dev/null; then
@@ -449,6 +461,7 @@ start_zeronet() {
     # Add a small delay before starting ZeroNet
     sleep 2
 
+    # Start ZeroNet with the updated PATH
     python3 zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
@@ -462,6 +475,8 @@ start_zeronet() {
     fi
 }
 
+check_openssl
+log "Starting ZeroNet..."
 start_zeronet
 
 log "ZeroNet started. Waiting 10 seconds before further operations..."
