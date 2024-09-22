@@ -135,24 +135,25 @@ source ~/.bashrc
 
 log "OpenSSL $OPENSSL_VERSION installation completed."
 
-log "Installing cryptography..."
-pkg install -y clang libffi openssl
+log "Installing cryptography and pyOpenSSL..."
+pip uninstall -y cryptography pyOpenSSL
 
-export CFLAGS="-I$PREFIX/include"
-export LDFLAGS="-L$PREFIX/lib"
-export CRYPTOGRAPHY_DONT_BUILD_RUST=1
-
-pip uninstall -y cryptography
-
-if ! pip install cryptography==3.4.7; then
-    log "Failed to install cryptography 3.4.7. Attempting to build from source..."
-    if ! pip install --no-binary :all: cryptography; then
-        log_error "Failed to install cryptography. You may need to downgrade OpenSSL or update the script."
+# First, try to install the latest versions
+if pip install cryptography pyOpenSSL; then
+    log "Successfully installed latest versions of cryptography and pyOpenSSL"
+else
+    log "Failed to install latest versions. Attempting to build cryptography from source..."
+    export CRYPTOGRAPHY_DONT_BUILD_RUST=1
+    if pip install --no-binary :all: cryptography && pip install pyOpenSSL; then
+        log "Successfully built and installed cryptography from source and installed pyOpenSSL"
+    else
+        log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
         exit 1
     fi
 fi
 
-log "Cryptography installation completed."
+# Verify the installations
+python -c "import cryptography; import OpenSSL; print(f'Installed cryptography version: {cryptography.__version__}'); print(f'Installed pyOpenSSL version: {OpenSSL.__version__}')" || log_error "Failed to import cryptography or pyOpenSSL"
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -286,14 +287,6 @@ export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
 
 pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
-
-log "Installing cryptography and pyOpenSSL..."
-pip uninstall -y cryptography pyOpenSSL
-pip install cryptography==3.4.7 pyOpenSSL==20.0.1 || {
-    log "Failed to install specific versions. Attempting to build cryptography from source..."
-    CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install --no-binary :all: cryptography
-    pip install pyOpenSSL
-} || log_error "Failed to install cryptography and pyOpenSSL"
 
 log "Verifying installations..."
 python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
