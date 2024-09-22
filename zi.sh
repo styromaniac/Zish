@@ -86,7 +86,7 @@ log "Installing and building the latest stable OpenSSL..."
 cd ~
 
 # Fetch the latest stable release version from GitHub API
-OPENSSL_VERSION=$(curl -s https://api.github.com/repos/openssl/openssl/releases | jq -r '[.[] | select(.prerelease == false and .draft == false)][0].tag_name')
+OPENSSL_VERSION=$(curl -s https://api.github.com/repos/openssl/openssl/releases | grep -oP '"tag_name": "\K(.*)(?=")' | grep -vE 'alpha|beta|rc' | head -n 1)
 
 if [ -z "$OPENSSL_VERSION" ] || [ "$OPENSSL_VERSION" == "null" ]; then
     log_error "Failed to determine the latest stable OpenSSL version"
@@ -98,7 +98,16 @@ log "Latest stable OpenSSL version: $OPENSSL_VERSION"
 # Download the latest stable version
 curl -L "https://github.com/openssl/openssl/archive/${OPENSSL_VERSION}.tar.gz" -o "openssl-${OPENSSL_VERSION}.tar.gz" || log_error "Failed to download OpenSSL source"
 tar xzf "openssl-${OPENSSL_VERSION}.tar.gz" || log_error "Failed to extract OpenSSL source"
-cd "openssl-${OPENSSL_VERSION#openssl-}"
+
+# Find the correct directory name after extraction
+OPENSSL_DIR=$(find . -maxdepth 1 -type d -name "openssl-*" | head -n 1)
+
+if [ -z "$OPENSSL_DIR" ]; then
+    log_error "Failed to find OpenSSL directory after extraction"
+    exit 1
+fi
+
+cd "$OPENSSL_DIR"
 
 # Configure OpenSSL for Termux
 ./Configure linux-aarch64 shared \
@@ -111,7 +120,7 @@ make -j$(nproc) || log_error "Failed to build OpenSSL"
 make install_sw || log_error "Failed to install OpenSSL"
 
 cd ~
-rm -rf "openssl-${OPENSSL_VERSION#openssl-}" "openssl-${OPENSSL_VERSION}.tar.gz"
+rm -rf "$OPENSSL_DIR" "openssl-${OPENSSL_VERSION}.tar.gz"
 
 # Add environment setup to .bashrc
 echo "
