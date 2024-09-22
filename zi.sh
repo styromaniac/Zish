@@ -86,7 +86,7 @@ log "Installing and building the latest stable OpenSSL..."
 cd ~
 
 # Fetch the latest stable release version from GitHub API
-OPENSSL_VERSION=$(curl -s https://api.github.com/repos/openssl/openssl/releases | grep -oP '"tag_name": "\K(.*)(?=")' | grep -vE 'alpha|beta|rc' | head -n 1)
+OPENSSL_VERSION=$(curl -s https://api.github.com/repos/openssl/openssl/releases | jq -r '[.[] | select(.prerelease == false and .draft == false)][0].tag_name')
 
 if [ -z "$OPENSSL_VERSION" ] || [ "$OPENSSL_VERSION" == "null" ]; then
     log_error "Failed to determine the latest stable OpenSSL version"
@@ -134,6 +134,25 @@ export LD_LIBRARY_PATH=\$PREFIX/lib:\$LD_LIBRARY_PATH
 source ~/.bashrc
 
 log "OpenSSL $OPENSSL_VERSION installation completed."
+
+log "Installing cryptography..."
+pkg install -y clang libffi openssl
+
+export CFLAGS="-I$PREFIX/include"
+export LDFLAGS="-L$PREFIX/lib"
+export CRYPTOGRAPHY_DONT_BUILD_RUST=1
+
+pip uninstall -y cryptography
+
+if ! pip install cryptography==3.4.7; then
+    log "Failed to install cryptography 3.4.7. Attempting to build from source..."
+    if ! pip install --no-binary :all: cryptography; then
+        log_error "Failed to install cryptography. You may need to downgrade OpenSSL or update the script."
+        exit 1
+    fi
+fi
+
+log "Cryptography installation completed."
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
