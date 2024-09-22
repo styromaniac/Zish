@@ -149,12 +149,12 @@ log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
 
 # Try to install a specific older version of cryptography using a pre-built wheel
-if pip install cryptography==3.4.7 pyOpenSSL==20.0.1 --only-binary=:all:; then
-    log "Successfully installed cryptography 3.4.7 and pyOpenSSL 20.0.1 using pre-built wheels"
+if pip install cryptography==3.3.2 pyOpenSSL==20.0.1 --only-binary=:all:; then
+    log "Successfully installed cryptography 3.3.2 and pyOpenSSL 20.0.1 using pre-built wheels"
 else
     log "Failed to install using pre-built wheels. Attempting to install with pip's default behavior..."
-    if pip install cryptography==3.4.7 pyOpenSSL==20.0.1; then
-        log "Successfully installed cryptography 3.4.7 and pyOpenSSL 20.0.1"
+    if CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography==3.3.2 pyOpenSSL==20.0.1; then
+        log "Successfully installed cryptography 3.3.2 and pyOpenSSL 20.0.1"
     else
         log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
         exit 1
