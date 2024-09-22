@@ -82,24 +82,28 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-log "Installing and building OpenSSL..."
+log "Installing and building OpenSSL 3.3.2..."
 cd ~
-curl -O https://www.openssl.org/source/openssl-1.1.1l.tar.gz || log_error "Failed to download OpenSSL source"
-tar xzf openssl-1.1.1l.tar.gz || log_error "Failed to extract OpenSSL source"
-cd openssl-1.1.1l
+curl -O https://www.openssl.org/source/openssl-3.3.2.tar.gz || log_error "Failed to download OpenSSL source"
+tar xzf openssl-3.3.2.tar.gz || log_error "Failed to extract OpenSSL source"
+cd openssl-3.3.2
 
+# Configure OpenSSL for Termux
 ./Configure linux-aarch64 shared \
     --prefix=$PREFIX \
     --openssldir=$PREFIX/etc/ssl \
     || log_error "Failed to configure OpenSSL"
 
+# Build and install
 make -j$(nproc) || log_error "Failed to build OpenSSL"
 make install_sw || log_error "Failed to install OpenSSL"
 
 cd ~
-rm -rf openssl-1.1.1l openssl-1.1.1l.tar.gz
+rm -rf openssl-3.3.2 openssl-3.3.2.tar.gz
 
+# Add environment setup to .bashrc
 echo '
+# OpenSSL environment setup
 export OPENSSL_DIR=$PREFIX
 export OPENSSL_INCLUDE_DIR=$PREFIX/include
 export OPENSSL_LIB_DIR=$PREFIX/lib
@@ -108,7 +112,7 @@ export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
 
 source ~/.bashrc
 
-log "OpenSSL installation completed."
+log "OpenSSL 3.3.2 installation completed."
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
