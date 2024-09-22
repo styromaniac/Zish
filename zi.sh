@@ -329,51 +329,30 @@ with open('$TRACKERS_FILE', 'w') as f:
             log "Failed to download from $tracker_url."
         fi
     done
-    log_error "Failed to download from any URL. Retrying in 5 seconds..."
-    sleep 5
+    log_error "Failed to download from any URL."
 }
 
-get_zeronet_port() {
-    log "Starting ZeroNet briefly to generate config..."
-    cd $ZERONET_DIR && . ./venv/bin/activate
-    python zeronet.py --config_file $ZERONET_DIR/zeronet.conf > zeronet_output.log 2>&1 &
-    TEMP_ZERONET_PID=$!
-    
-    # Wait for up to 30 seconds for ZeroNet to start
-    for i in {1..30}; do
-        if grep -q "FileServer listening on" zeronet_output.log; then
-            log "Found FileServer listening message after $i seconds"
-            break
-        fi
-        sleep 1
+generate_random_port() {
+    log "Generating a random, collision-free port number for ZeroNet..."
+
+    # Valid port range: 1025-65535 (non-privileged ports)
+    RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
+
+    # Check if the port is in use
+    while netstat -tuln | grep -q ":$RANDOM_PORT "; do
+        log "Port $RANDOM_PORT is in use. Generating a new port..."
+        RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
     done
 
-    # Try to kill the temporary ZeroNet process
-    if kill $TEMP_ZERONET_PID 2>/dev/null; then
-        log "Temporary ZeroNet process stopped."
-    else
-        log "Warning: Could not stop temporary ZeroNet process. It may have already exited."
-    fi
+    log "Selected port $RANDOM_PORT for ZeroNet."
 
-    FILESERVER_PORT=$(grep -oP '(?<=FileServer listening on port )\d+' zeronet_output.log)
-    if [ -z "$FILESERVER_PORT" ]; then
-        log "Failed to determine ZeroNet's file server port. Here's the ZeroNet output:"
-        cat zeronet_output.log
-        log_error "Failed to determine ZeroNet's file server port"
-        exit 1
-    fi
-    log "ZeroNet chose port: $FILESERVER_PORT"
-
-    # Update zeronet.conf with the found port
-    sed -i "s/^fileserver_port = .*/fileserver_port = $FILESERVER_PORT/" "$ZERONET_DIR/zeronet.conf"
-    log "Updated zeronet.conf with fileserver_port = $FILESERVER_PORT"
-
-    rm zeronet_output.log
+    export FILESERVER_PORT=$RANDOM_PORT
+    log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
 }
 
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-    
+
     cat > "$conf_file" << EOL
 [global]
 data_dir = $ZERONET_DIR/data
@@ -385,6 +364,7 @@ tor_proxy = 127.0.0.1:49050
 trackers_file = $ZERONET_DIR/data/trackers.json
 language = en
 tor = always
+fileserver_port = $FILESERVER_PORT
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
@@ -409,7 +389,7 @@ EOL
 
 # Execute the functions in the new order
 update_trackers
-get_zeronet_port
+generate_random_port
 create_zeronet_conf
 configure_tor
 
@@ -468,7 +448,7 @@ start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
     python zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
-    
+
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID \$ZERONET_PID" --ongoing
@@ -488,14 +468,14 @@ log "Starting ZeroNet..."
 start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
-    
+
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
         log "Renamed disabled-Bootstrapper to Bootstrapper"
     else
         log "disabled-Bootstrapper directory not found"
     fi
-    
+
     python zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
