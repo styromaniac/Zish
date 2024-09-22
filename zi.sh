@@ -147,16 +147,22 @@ pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent
 
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
-pip install --no-deps cryptography==3.4.7 pyOpenSSL==20.0.1 || {
-    log "Failed to install specific versions. Attempting to build cryptography from source..."
-    CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install --no-deps --no-binary :all: cryptography
-    pip install --no-deps pyOpenSSL
-} || log_error "Failed to install cryptography and pyOpenSSL"
+
+# Try to install a specific older version of cryptography using a pre-built wheel
+if pip install cryptography==3.4.7 pyOpenSSL==20.0.1 --only-binary=:all:; then
+    log "Successfully installed cryptography 3.4.7 and pyOpenSSL 20.0.1 using pre-built wheels"
+else
+    log "Failed to install using pre-built wheels. Attempting to install with pip's default behavior..."
+    if pip install cryptography==3.4.7 pyOpenSSL==20.0.1; then
+        log "Successfully installed cryptography 3.4.7 and pyOpenSSL 20.0.1"
+    else
+        log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
+        exit 1
+    fi
+fi
 
 # Install dependencies separately
-pip install --no-deps cffi
-pip install --no-deps six
-pip install --no-deps idna
+pip install cffi six idna
 
 log "Verifying installations..."
 python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
