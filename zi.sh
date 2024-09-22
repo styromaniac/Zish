@@ -425,6 +425,20 @@ start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
 
+    # Check for existing ZeroNet processes
+    if pgrep -f "python3.*zeronet.py" > /dev/null; then
+        log "Existing ZeroNet process found. Terminating..."
+        pkill -f "python3.*zeronet.py"
+        sleep 5  # Wait for the process to terminate
+    fi
+
+    # Remove lock file if it exists
+    LOCK_FILE="$ZERONET_DIR/data/lock.pid"
+    if [ -f "$LOCK_FILE" ]; then
+        log "Removing stale lock file..."
+        rm "$LOCK_FILE"
+    fi
+
     if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
         mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
         log "Renamed disabled-Bootstrapper to Bootstrapper"
@@ -432,10 +446,20 @@ start_zeronet() {
         log "disabled-Bootstrapper directory not found"
     fi
 
+    # Add a small delay before starting ZeroNet
+    sleep 2
+
     python3 zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+
+    # Wait a moment to check if the process is still running
+    sleep 5
+    if ! ps -p $ZERONET_PID > /dev/null; then
+        log_error "ZeroNet process terminated unexpectedly. Check logs for details."
+        exit 1
+    fi
 }
 
 start_zeronet
@@ -481,7 +505,10 @@ restart_zeronet() {
     termux-dialog confirm -i "Are you sure you want to restart ZeroNet?" -t "Restart ZeroNet"
     if [ $? -eq 0 ]; then
         log "Restarting ZeroNet..."
-        kill $ZERONET_PID
+        if [ ! -z "$ZERONET_PID" ]; then
+            kill $ZERONET_PID
+            sleep 5  # Wait for the process to terminate
+        fi
         start_zeronet
         log "ZeroNet restarted with PID $ZERONET_PID"
         termux-notification --title "ZeroNet Restarted" --content "New PID: $ZERONET_PID"
