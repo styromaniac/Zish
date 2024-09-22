@@ -138,13 +138,18 @@ log "OpenSSL $OPENSSL_VERSION installation completed."
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
 
-# Try to install the latest versions using pre-built wheels
-if pip install --only-binary=:all: cryptography pyOpenSSL; then
-    log "Successfully installed latest versions of cryptography and pyOpenSSL using pre-built wheels"
+# Try to install specific versions known to work with ZeroNet
+CRYPTO_VERSION="3.3.2"
+PYOPENSSL_VERSION="20.0.1"
+
+if pip install cryptography==$CRYPTO_VERSION pyOpenSSL==$PYOPENSSL_VERSION; then
+    log "Successfully installed cryptography $CRYPTO_VERSION and pyOpenSSL $PYOPENSSL_VERSION"
 else
-    log "Failed to install latest versions using pre-built wheels. Attempting to install an older version..."
-    if pip install cryptography==3.4.7 pyOpenSSL==20.0.1; then
-        log "Successfully installed cryptography 3.4.7 and pyOpenSSL 20.0.1"
+    log "Failed to install specific versions. Attempting to install slightly older versions..."
+    CRYPTO_VERSION="3.2.1"
+    PYOPENSSL_VERSION="19.1.0"
+    if pip install cryptography==$CRYPTO_VERSION pyOpenSSL==$PYOPENSSL_VERSION; then
+        log "Successfully installed cryptography $CRYPTO_VERSION and pyOpenSSL $PYOPENSSL_VERSION"
     else
         log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
         exit 1
