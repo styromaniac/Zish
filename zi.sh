@@ -136,20 +136,23 @@ source ~/.bashrc
 log "OpenSSL $OPENSSL_VERSION installation completed."
 
 log "Installing required Python packages..."
-pip install --upgrade pip
-
 export CFLAGS="-I$PREFIX/include"
 export LDFLAGS="-L$PREFIX/lib"
 
-pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
+pip install --no-deps gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
 
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
-pip install cryptography==3.4.7 pyOpenSSL==20.0.1 || {
+pip install --no-deps cryptography==3.4.7 pyOpenSSL==20.0.1 || {
     log "Failed to install specific versions. Attempting to build cryptography from source..."
-    CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install --no-binary :all: cryptography
-    pip install pyOpenSSL
+    CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install --no-deps --no-binary :all: cryptography
+    pip install --no-deps pyOpenSSL
 } || log_error "Failed to install cryptography and pyOpenSSL"
+
+# Install dependencies separately
+pip install --no-deps cffi
+pip install --no-deps six
+pip install --no-deps idna
 
 log "Verifying installations..."
 python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
