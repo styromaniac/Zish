@@ -308,7 +308,7 @@ tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
 tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
 trackers_file = $TRACKERS_FILE
 language = en
-tor = always
+tor = enabled
 fileserver_port = $FILESERVER_PORT
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
