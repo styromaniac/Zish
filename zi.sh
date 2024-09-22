@@ -52,7 +52,7 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl
+    clang make termux-api tor perl jq
 )
 
 install_package() {
@@ -82,11 +82,23 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-log "Installing and building OpenSSL 3.3.2..."
+log "Installing and building the latest stable OpenSSL..."
 cd ~
-curl -O https://www.openssl.org/source/openssl-3.3.2.tar.gz || log_error "Failed to download OpenSSL source"
-tar xzf openssl-3.3.2.tar.gz || log_error "Failed to extract OpenSSL source"
-cd openssl-3.3.2
+
+# Fetch the latest stable release version from GitHub API
+OPENSSL_VERSION=$(curl -s https://api.github.com/repos/openssl/openssl/releases | jq -r '[.[] | select(.prerelease == false and .draft == false)][0].tag_name')
+
+if [ -z "$OPENSSL_VERSION" ] || [ "$OPENSSL_VERSION" == "null" ]; then
+    log_error "Failed to determine the latest stable OpenSSL version"
+    exit 1
+fi
+
+log "Latest stable OpenSSL version: $OPENSSL_VERSION"
+
+# Download the latest stable version
+curl -L "https://github.com/openssl/openssl/archive/${OPENSSL_VERSION}.tar.gz" -o "openssl-${OPENSSL_VERSION}.tar.gz" || log_error "Failed to download OpenSSL source"
+tar xzf "openssl-${OPENSSL_VERSION}.tar.gz" || log_error "Failed to extract OpenSSL source"
+cd "openssl-${OPENSSL_VERSION#openssl-}"
 
 # Configure OpenSSL for Termux
 ./Configure linux-aarch64 shared \
@@ -99,20 +111,20 @@ make -j$(nproc) || log_error "Failed to build OpenSSL"
 make install_sw || log_error "Failed to install OpenSSL"
 
 cd ~
-rm -rf openssl-3.3.2 openssl-3.3.2.tar.gz
+rm -rf "openssl-${OPENSSL_VERSION#openssl-}" "openssl-${OPENSSL_VERSION}.tar.gz"
 
 # Add environment setup to .bashrc
-echo '
+echo "
 # OpenSSL environment setup
-export OPENSSL_DIR=$PREFIX
-export OPENSSL_INCLUDE_DIR=$PREFIX/include
-export OPENSSL_LIB_DIR=$PREFIX/lib
-export LD_LIBRARY_PATH=$PREFIX/lib:$LD_LIBRARY_PATH
-' >> ~/.bashrc
+export OPENSSL_DIR=\$PREFIX
+export OPENSSL_INCLUDE_DIR=\$PREFIX/include
+export OPENSSL_LIB_DIR=\$PREFIX/lib
+export LD_LIBRARY_PATH=\$PREFIX/lib:\$LD_LIBRARY_PATH
+" >> ~/.bashrc
 
 source ~/.bashrc
 
-log "OpenSSL 3.3.2 installation completed."
+log "OpenSSL $OPENSSL_VERSION installation completed."
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
