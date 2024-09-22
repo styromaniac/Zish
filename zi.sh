@@ -135,29 +135,24 @@ source ~/.bashrc
 
 log "OpenSSL $OPENSSL_VERSION installation completed."
 
+log "Installing required Python packages..."
+pip install --upgrade pip
+
+export CFLAGS="-I$PREFIX/include"
+export LDFLAGS="-L$PREFIX/lib"
+
+pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
+
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
+pip install cryptography==3.4.7 pyOpenSSL==20.0.1 || {
+    log "Failed to install specific versions. Attempting to build cryptography from source..."
+    CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install --no-binary :all: cryptography
+    pip install pyOpenSSL
+} || log_error "Failed to install cryptography and pyOpenSSL"
 
-# Try to install specific versions known to work with ZeroNet
-CRYPTO_VERSION="3.3.2"
-PYOPENSSL_VERSION="20.0.1"
-
-if pip install cryptography==$CRYPTO_VERSION pyOpenSSL==$PYOPENSSL_VERSION; then
-    log "Successfully installed cryptography $CRYPTO_VERSION and pyOpenSSL $PYOPENSSL_VERSION"
-else
-    log "Failed to install specific versions. Attempting to install slightly older versions..."
-    CRYPTO_VERSION="3.2.1"
-    PYOPENSSL_VERSION="19.1.0"
-    if pip install cryptography==$CRYPTO_VERSION pyOpenSSL==$PYOPENSSL_VERSION; then
-        log "Successfully installed cryptography $CRYPTO_VERSION and pyOpenSSL $PYOPENSSL_VERSION"
-    else
-        log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
-        exit 1
-    fi
-fi
-
-# Verify the installations
-python -c "import cryptography; import OpenSSL; print(f'Installed cryptography version: {cryptography.__version__}'); print(f'Installed pyOpenSSL version: {OpenSSL.__version__}')" || log_error "Failed to import cryptography or pyOpenSSL"
+log "Verifying installations..."
+python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -267,17 +262,6 @@ if [ ! -d "$ZERONET_DIR/venv" ]; then
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
-
-log "Installing required Python packages..."
-pip install --upgrade pip
-
-export CFLAGS="-I$PREFIX/include"
-export LDFLAGS="-L$PREFIX/lib"
-
-pip install gevent pycryptodome || log_error "Failed to install gevent and pycryptodome"
-
-log "Verifying installations..."
-python -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 
 chmod -R u+rwX "$ZERONET_DIR"
 
