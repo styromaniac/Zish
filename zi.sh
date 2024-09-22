@@ -138,14 +138,13 @@ log "OpenSSL $OPENSSL_VERSION installation completed."
 log "Installing cryptography and pyOpenSSL..."
 pip uninstall -y cryptography pyOpenSSL
 
-# First, try to install the latest versions
-if pip install cryptography pyOpenSSL; then
-    log "Successfully installed latest versions of cryptography and pyOpenSSL"
+# Try to install the latest versions using pre-built wheels
+if pip install --only-binary=:all: cryptography pyOpenSSL; then
+    log "Successfully installed latest versions of cryptography and pyOpenSSL using pre-built wheels"
 else
-    log "Failed to install latest versions. Attempting to build cryptography from source..."
-    export CRYPTOGRAPHY_DONT_BUILD_RUST=1
-    if pip install --no-binary :all: cryptography && pip install pyOpenSSL; then
-        log "Successfully built and installed cryptography from source and installed pyOpenSSL"
+    log "Failed to install latest versions using pre-built wheels. Attempting to install an older version..."
+    if pip install cryptography==3.4.7 pyOpenSSL==20.0.1; then
+        log "Successfully installed cryptography 3.4.7 and pyOpenSSL 20.0.1"
     else
         log_error "Failed to install cryptography and pyOpenSSL. Please check your build environment and try again."
         exit 1
@@ -263,22 +262,6 @@ if [ ! -d "$ZERONET_DIR/venv" ]; then
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
-
-log "Installing Rust..."
-pkg install -y rust || log_error "Failed to install Rust"
-
-echo 'export PATH=$PATH:$HOME/.cargo/bin' >> $HOME/.bashrc
-source $HOME/.bashrc
-
-log "Rust installation completed. Verifying installation..."
-if ! command -v rustc &> /dev/null; then
-    log_error "Rust installation failed. 'rustc' command not found."
-fi
-if ! command -v cargo &> /dev/null; then
-    log_error "Rust installation failed. 'cargo' command not found."
-fi
-
-log "Rust installed successfully."
 
 log "Installing required Python packages..."
 pip install --upgrade pip
