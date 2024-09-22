@@ -385,8 +385,11 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
-ZERONET_DIR=$ZERONET_DIR
-TORRC_FILE=$HOME/.tor/torrc
+ZERONET_DIR="$HOME/apps/zeronet"
+TORRC_FILE="$HOME/.tor/torrc"
+
+export PATH=\$PATH:\$PREFIX/bin
+export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
 
 start_tor() {
     tor -f "\$TORRC_FILE" &
@@ -402,7 +405,6 @@ start_tor() {
 start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
-    export PATH=\$PATH:\$PREFIX/bin
     python3 zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
 
     ZERONET_PID=\$!
@@ -529,71 +531,20 @@ restart_zeronet() {
     fi
 }
 
-LAST_CHECKED_TIME=0
-HOMEPAGE_ADDRESS="191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um"
-
-check_for_new_content() {
-    local content_json="$ZERONET_DIR/data/$HOMEPAGE_ADDRESS/content.json"
-    if [ ! -f "$content_json" ]; then
-        log "content.json not found for ZeroNet Conservancy homepage. Skipping check."
-        return
-    fi
-
-    local current_time=$(date +%s)
-    local file_mod_time=$(stat -c %Y "$content_json")
-
-    if [ $file_mod_time -gt $LAST_CHECKED_TIME ]; then
-        log "New content detected on ZeroNet Conservancy homepage. Checking for new posts..."
-        local new_posts=$(python3 -c "
-import json
-with open('$content_json', 'r') as f:
-    data = json.load(f)
-posts = data.get('posts', [])
-new_posts = [post for post in posts if post.get('date_added', 0) / 1000 > $LAST_CHECKED_TIME]
-for post in new_posts[:5]:  # Limit to 5 newest posts
-    print(f\"New post: {post.get('title', 'Untitled')}\")")
-
-        if [ ! -z "$new_posts" ]; then
-            log "$new_posts"
-            termux-notification --title "New ZeroNet Content" --content "$new_posts"
-        fi
-        LAST_CHECKED_TIME=$current_time
-    else
-        log "No new content detected on ZeroNet Conservancy homepage."
-    fi
-}
-
-check_content_loop() {
-    while true; do
-        check_for_new_content
-        sleep 300  # Check every 5 minutes
-    done
-}
-
-check_content_loop &
-CONTENT_CHECK_PID=$!
-
 while true; do
-    ACTION=$(termux-dialog sheet -v "Edit ZeroNet File,View Log,Restart ZeroNet,Check for New Content,Exit" -t "ZeroNet Management")
+    ACTION=$(termux-dialog sheet -v "View Log,Restart ZeroNet,Exit" -t "ZeroNet Management")
     case $ACTION in
-        *"Edit ZeroNet File"*)
-            edit_zeronet_file
-            ;;
         *"View Log"*)
             view_log
             ;;
         *"Restart ZeroNet"*)
             restart_zeronet
             ;;
-        *"Check for New Content"*)
-            check_for_new_content
-            ;;
         *"Exit"*)
-            termux-dialog confirm -i "Are you sure you want to exit? This will stop ZeroNet and content checking." -t "Exit ZeroNet"
+            termux-dialog confirm -i "Are you sure you want to exit? This will stop ZeroNet." -t "Exit ZeroNet"
             if [ $? -eq 0 ]; then
                 log "Stopping ZeroNet and exiting..."
                 kill $ZERONET_PID
-                kill $CONTENT_CHECK_PID
                 termux-notification-remove 1
                 exit 0
             fi
