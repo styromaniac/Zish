@@ -1,5 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+termux-wake-lock
+
+termux-change-repo
+
+termux-setup-storage
+
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
@@ -15,17 +21,27 @@ log_error() {
     exit 1
 }
 
-termux-wake-lock
+# User prompts
+log "Please provide the Git clone URL or path to the ZeroNet ZIP file (Git URL, .zip, or .tar.gz):"
+read -r zeronet_source
 
-termux-change-repo
+log "Please provide URL, path to users.json, or press Enter to skip:"
+read -r users_json_source
 
-termux-setup-storage
+BOOT_SCRIPT="$HOME/.termux/boot/start-zeronet"
+log "This script will create a Termux Boot script at: $BOOT_SCRIPT"
+log "The script will start ZeroNet automatically when your device boots."
+log ""
+log "IMPORTANT: For this to work, you need to have opened Termux:Boot at least once since the last fresh start of Termux."
+log ""
+log "Have you done this? (y/n)"
+read -r boot_setup
 
 update_mirrors() {
     local max_attempts=5
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if pkg update; then
+        if yes | pkg update; then
             log "Successfully updated package lists"
             return 0
         else
@@ -44,7 +60,7 @@ update_mirrors() {
 
 update_mirrors || exit 1
 
-pkg upgrade -y
+yes | pkg upgrade
 
 required_packages=(
     termux-tools termux-keyring python
@@ -58,7 +74,7 @@ install_package() {
     local max_attempts=3
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if pkg install -y "$package"; then
+        if yes | pkg install -y "$package"; then
             log "Successfully installed $package"
             return 0
         else
@@ -81,7 +97,7 @@ for package in "${required_packages[@]}"; do
 done
 
 log "Installing OpenSSL from Termux repository..."
-pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
+yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
 
 log "OpenSSL installation completed."
 
@@ -109,9 +125,6 @@ mkdir -p "$ZERONET_DIR"
 
 WORK_DIR="$(mktemp -d "$HOME/tmp.XXXXXX")"
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
-
-log "Please provide the Git clone URL or path to the ZeroNet ZIP file (Git URL, .zip, or .tar.gz):"
-read -r zeronet_source
 
 download_with_retries() {
     local url=$1
@@ -219,9 +232,6 @@ fi
 
 mkdir -p ./data
 chmod -R u+rwX ./data
-
-log "Please provide URL, path to users.json, or press Enter to skip:"
-read -r users_json_source
 
 if [[ "$users_json_source" == http* ]]; then
     mkdir -p data
@@ -369,17 +379,6 @@ else
     tail -n 20 "$PREFIX/var/log/tor/notices.log"
     exit 1
 fi
-
-BOOT_SCRIPT="$HOME/.termux/boot/start-zeronet"
-mkdir -p "$HOME/.termux/boot"
-
-log "This script will create a Termux Boot script at: $BOOT_SCRIPT"
-log "The script will start ZeroNet automatically when your device boots."
-log ""
-log "IMPORTANT: For this to work, you need to have opened Termux:Boot at least once since the last fresh start of Termux."
-log ""
-log "Have you done this? (y/n)"
-read -r boot_setup
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
     cat > "$BOOT_SCRIPT" << EOL
