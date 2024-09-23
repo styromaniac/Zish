@@ -367,7 +367,8 @@ ui_ip = 127.0.0.1
 ui_port = 43110
 tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
 tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
-trackers_file = $TRACKERS_FILE,{data_dir}/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html
+trackers_file = $TRACKERS_FILE
+ {data_dir}/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
