@@ -361,6 +361,7 @@ create_zeronet_conf() {
 
     cat > "$conf_file" << EOL
 [global]
+homepage = 15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o
 data_dir = $ZERONET_DIR/data
 log_dir = $PREFIX/var/log/zeronet
 ui_ip = 127.0.0.1
@@ -543,12 +544,29 @@ start_zeronet() {
     fi
 }
 
+setup_geolite2_database() {
+    log "Setting up GeoLite2 City database..."
+    GEOLITE2_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
+    GEOLITE2_DIR="$ZERONET_DIR/data/1PLAYgDQboKojowD3kwdb3CtWmWaokXvfp"
+    
+    mkdir -p "$GEOLITE2_DIR"
+    
+    if curl -L "$GEOLITE2_URL" | gunzip > "$GEOLITE2_DIR/GeoLite2-City.mmdb"; then
+        log "GeoLite2 City database downloaded and extracted successfully."
+    else
+        log_error "Failed to download or extract GeoLite2 City database."
+    fi
+}
+
 check_openssl
 log "Starting ZeroNet..."
 start_zeronet
 
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
+
+log "Setting up GeoLite2 database..."
+setup_geolite2_database
 
 log "Shutting down ZeroNet via API..."
 curl -X POST http://127.0.0.1:43110/ZeroNet-Internal/Shutdown
