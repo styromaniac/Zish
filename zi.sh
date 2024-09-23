@@ -319,18 +319,36 @@ update_trackers() {
 
     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
+    # Download trackers from online sources
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
         if curl -A "$user_agent" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
             log "Successfully downloaded tracker list from $tracker_url"
             chmod 644 "$TRACKERS_FILE"
-            return
+            break
         else
             log "Failed to download from $tracker_url."
         fi
     done
-    log_error "Failed to download from any URL. Retrying in 5 seconds..."
-    sleep 5
+
+    # Add trackers from Syncronite.html
+    SYNCRONITE_HTML="$ZERONET_DIR/data/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html"
+    if [ -f "$SYNCRONITE_HTML" ]; then
+        log "Extracting trackers from Syncronite.html..."
+        grep -oP '(?<=announce=)[^&]+' "$SYNCRONITE_HTML" | sort -u >> "$TRACKERS_FILE"
+        log "Added trackers from Syncronite.html to $TRACKERS_FILE"
+    else
+        log "Syncronite.html not found. Skipping additional trackers."
+    fi
+
+    # Deduplicate and clean up the trackers file
+    if [ -f "$TRACKERS_FILE" ]; then
+        sort -u "$TRACKERS_FILE" | grep -v '^$' > "${TRACKERS_FILE}.tmp"
+        mv "${TRACKERS_FILE}.tmp" "$TRACKERS_FILE"
+        log "Trackers list updated and deduplicated."
+    else
+        log_error "Failed to create or update trackers file."
+    fi
 }
 
 generate_random_port() {
@@ -550,10 +568,7 @@ start_zeronet
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
 
-log "Shutting down ZeroNet via API..."
-curl -X POST http://127.0.0.1:43110/ZeroNet-Internal/Shutdown
-
-log "Downloading and extracting ZIP file..."
+log "Downloading and extracting Syncronite ZIP file..."
 ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 ZIP_DIR="$ZERONET_DIR/data/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 
@@ -562,12 +577,11 @@ curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"
 unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
 rm "$ZIP_DIR/content.zip"
 
-log "ZIP file extracted to $ZIP_DIR"
+log "Syncronite ZIP file extracted to $ZIP_DIR"
 
 update_trackers
 
-log "Restarting ZeroNet..."
-start_zeronet
+log "ZeroNet setup complete with Syncronite loaded."
 
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
@@ -576,48 +590,4 @@ if ! pgrep -f "zeronet.py" > /dev/null; then
     exit 1
 fi
 
-view_log() {
-    termux-dialog confirm -i "View last 50 lines of log?" -t "View Log"
-    if [ $? -eq 0 ]; then
-        LOG_CONTENT=$(tail -n 50 "$PREFIX/var/log/zeronet/debug.log")
-        termux-dialog text -t "ZeroNet Log (last 50 lines)" -i "$LOG_CONTENT"
-    fi
-}
-
-restart_zeronet() {
-    termux-dialog confirm -i "Are you sure you want to restart ZeroNet?" -t "Restart ZeroNet"
-    if [ $? -eq 0 ]; then
-        log "Restarting ZeroNet..."
-        if [ ! -z "$ZERONET_PID" ]; then
-            kill $ZERONET_PID
-            sleep 5  # Wait for the process to terminate
-        fi
-        start_zeronet
-        log "ZeroNet restarted with PID $ZERONET_PID"
-        termux-notification --title "ZeroNet Restarted" --content "New PID: $ZERONET_PID"
-    fi
-}
-
-while true; do
-    ACTION=$(termux-dialog sheet -v "View Log,Restart ZeroNet,Exit" -t "ZeroNet Management")
-    case $ACTION in
-        *"View Log"*)
-            view_log
-            ;;
-        *"Restart ZeroNet"*)
-            restart_zeronet
-            ;;
-        *"Exit"*)
-            termux-dialog confirm -i "Are you sure you want to exit? This will stop ZeroNet." -t "Exit ZeroNet"
-            if [ $? -eq 0 ]; then
-                log "Stopping ZeroNet and exiting..."
-                kill $ZERONET_PID
-                termux-notification-remove 1
-                exit 0
-            fi
-            ;;
-        *)
-            termux-toast "Invalid choice. Please try again."
-            ;;
-    esac
-done
+log "ZeroNet is running successfully with Syncronite loaded."
