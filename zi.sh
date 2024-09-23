@@ -561,9 +561,15 @@ rm "$ZIP_DIR/content.zip"
 
 log "Syncronite ZIP file extracted to $ZIP_DIR"
 
+log "Adding Syncronite site to ZeroNet..."
+cd "$ZERONET_DIR"
+python3 zeronet.py --debug siteAdd 15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o
+
+log "Syncronite site added to ZeroNet."
+
 update_trackers
 
-log "ZeroNet setup complete with Syncronite loaded."
+log "ZeroNet setup complete with Syncronite loaded and added."
 
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
@@ -572,4 +578,4 @@ if ! pgrep -f "zeronet.py" > /dev/null; then
     exit 1
 fi
 
-log "ZeroNet is running successfully with Syncronite loaded."
+log "ZeroNet is running successfully with Syncronite loaded and added."
