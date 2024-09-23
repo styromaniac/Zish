@@ -1,7 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-set -e
-
 termux-wake-lock
 
 termux-change-repo
@@ -552,19 +550,19 @@ setup_geolite2_database() {
     GEOLITE2_DIR="$ZERONET_DIR/data/1PLAYgDQboKojowD3kwdb3CtWmWaokXvfp"
     GEOLITE2_GZ="$GEOLITE2_DIR/GeoLite2-City.mmdb.gz"
     GEOLITE2_MMDB="$GEOLITE2_DIR/GeoLite2-City.mmdb"
-    
+
     mkdir -p "$GEOLITE2_DIR"
-    
-    log "Downloading GeoLite2 City database..."
-    if curl -k -L "$GEOLITE2_URL" -o "$GEOLITE2_GZ"; then
+
+    if [ -f "$GEOLITE2_MMDB" ]; then
+        log "GeoLite2-City.mmdb is already present in the correct location."
+        return
+    fi
+
+    log "Attempting to download GeoLite2 City database..."
+    if curl -kL "$GEOLITE2_URL" -o "$GEOLITE2_GZ"; then
         log "Download successful. Extracting..."
         if gunzip -f "$GEOLITE2_GZ"; then
             log "GeoLite2 City database downloaded and extracted successfully."
-            if [ -f "$GEOLITE2_MMDB" ]; then
-                log "Verified: GeoLite2-City.mmdb is present in the correct location."
-            else
-                log_error "Extraction seemed successful, but GeoLite2-City.mmdb is not present in the expected location."
-            fi
         else
             log_error "Failed to extract GeoLite2 City database."
         fi
@@ -573,11 +571,21 @@ setup_geolite2_database() {
     fi
 
     if [ ! -f "$GEOLITE2_MMDB" ]; then
-        log "Manual intervention required:"
-        log "Please download the database manually from:"
-        log "$GEOLITE2_URL"
-        log "Then, extract it and place GeoLite2-City.mmdb in:"
-        log "$GEOLITE2_DIR"
+        log "Manual intervention required. Please follow these steps:"
+        log "1. Open a web browser and download the file from:"
+        log "   $GEOLITE2_URL"
+        log "2. Extract the downloaded .gz file"
+        log "3. Move the extracted GeoLite2-City.mmdb file to:"
+        log "   $GEOLITE2_DIR"
+        log "4. Once completed, press Enter to continue."
+        read -p "Press Enter when you have completed these steps..."
+
+        if [ -f "$GEOLITE2_MMDB" ]; then
+            log "GeoLite2-City.mmdb has been successfully placed in the correct location."
+        else
+            log_error "GeoLite2-City.mmdb is still not present in $GEOLITE2_DIR."
+            log "The script will continue, but ZeroNet may not have full functionality."
+        fi
     fi
 }
 
