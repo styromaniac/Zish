@@ -361,7 +361,6 @@ create_zeronet_conf() {
 
     cat > "$conf_file" << EOL
 [global]
-homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
 data_dir = $ZERONET_DIR/data
 log_dir = $PREFIX/var/log/zeronet
 ui_ip = 127.0.0.1
@@ -544,60 +543,12 @@ start_zeronet() {
     fi
 }
 
-setup_geolite2_database() {
-    log "Setting up GeoLite2 City database..."
-    GEOLITE2_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
-    GEOLITE2_DIR="$ZERONET_DIR/data/1PLAYgDQboKojowD3kwdb3CtWmWaokXvfp"
-    GEOLITE2_GZ="$GEOLITE2_DIR/GeoLite2-City.mmdb.gz"
-    GEOLITE2_MMDB="$GEOLITE2_DIR/GeoLite2-City.mmdb"
-
-    mkdir -p "$GEOLITE2_DIR"
-
-    if [ -f "$GEOLITE2_MMDB" ]; then
-        log "GeoLite2-City.mmdb is already present in the correct location."
-        return
-    fi
-
-    log "Attempting to download GeoLite2 City database..."
-    if curl -kL "$GEOLITE2_URL" -o "$GEOLITE2_GZ"; then
-        log "Download successful. Extracting..."
-        if gunzip -f "$GEOLITE2_GZ"; then
-            log "GeoLite2 City database downloaded and extracted successfully."
-        else
-            log_error "Failed to extract GeoLite2 City database."
-        fi
-    else
-        log_error "Failed to download GeoLite2 City database."
-    fi
-
-    if [ ! -f "$GEOLITE2_MMDB" ]; then
-        log "Manual intervention required. Please follow these steps:"
-        log "1. Open a web browser and download the file from:"
-        log "   $GEOLITE2_URL"
-        log "2. Extract the downloaded .gz file"
-        log "3. Move the extracted GeoLite2-City.mmdb file to:"
-        log "   $GEOLITE2_DIR"
-        log "4. Once completed, press Enter to continue."
-        read -p "Press Enter when you have completed these steps..."
-
-        if [ -f "$GEOLITE2_MMDB" ]; then
-            log "GeoLite2-City.mmdb has been successfully placed in the correct location."
-        else
-            log_error "GeoLite2-City.mmdb is still not present in $GEOLITE2_DIR."
-            log "The script will continue, but ZeroNet may not have full functionality."
-        fi
-    fi
-}
-
 check_openssl
 log "Starting ZeroNet..."
 start_zeronet
 
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
-
-log "Setting up GeoLite2 database..."
-setup_geolite2_database
 
 log "Shutting down ZeroNet via API..."
 curl -X POST http://127.0.0.1:43110/ZeroNet-Internal/Shutdown
