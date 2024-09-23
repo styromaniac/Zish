@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+set -e
+
 termux-wake-lock
 
 termux-change-repo
