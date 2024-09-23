@@ -361,7 +361,7 @@ create_zeronet_conf() {
 
     cat > "$conf_file" << EOL
 [global]
-homepage = 15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o
+homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
 data_dir = $ZERONET_DIR/data
 log_dir = $PREFIX/var/log/zeronet
 ui_ip = 127.0.0.1
@@ -548,13 +548,34 @@ setup_geolite2_database() {
     log "Setting up GeoLite2 City database..."
     GEOLITE2_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
     GEOLITE2_DIR="$ZERONET_DIR/data/1PLAYgDQboKojowD3kwdb3CtWmWaokXvfp"
+    GEOLITE2_GZ="$GEOLITE2_DIR/GeoLite2-City.mmdb.gz"
+    GEOLITE2_MMDB="$GEOLITE2_DIR/GeoLite2-City.mmdb"
     
     mkdir -p "$GEOLITE2_DIR"
     
-    if curl -L "$GEOLITE2_URL" | gunzip > "$GEOLITE2_DIR/GeoLite2-City.mmdb"; then
-        log "GeoLite2 City database downloaded and extracted successfully."
+    log "Downloading GeoLite2 City database..."
+    if curl -k -L "$GEOLITE2_URL" -o "$GEOLITE2_GZ"; then
+        log "Download successful. Extracting..."
+        if gunzip -f "$GEOLITE2_GZ"; then
+            log "GeoLite2 City database downloaded and extracted successfully."
+            if [ -f "$GEOLITE2_MMDB" ]; then
+                log "Verified: GeoLite2-City.mmdb is present in the correct location."
+            else
+                log_error "Extraction seemed successful, but GeoLite2-City.mmdb is not present in the expected location."
+            fi
+        else
+            log_error "Failed to extract GeoLite2 City database."
+        fi
     else
-        log_error "Failed to download or extract GeoLite2 City database."
+        log_error "Failed to download GeoLite2 City database."
+    fi
+
+    if [ ! -f "$GEOLITE2_MMDB" ]; then
+        log "Manual intervention required:"
+        log "Please download the database manually from:"
+        log "$GEOLITE2_URL"
+        log "Then, extract it and place GeoLite2-City.mmdb in:"
+        log "$GEOLITE2_DIR"
     fi
 }
 
