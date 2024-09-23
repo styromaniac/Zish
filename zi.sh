@@ -319,36 +319,18 @@ update_trackers() {
 
     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
-    # Download trackers from online sources
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
         if curl -A "$user_agent" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
             log "Successfully downloaded tracker list from $tracker_url"
             chmod 644 "$TRACKERS_FILE"
-            break
+            return
         else
             log "Failed to download from $tracker_url."
         fi
     done
-
-    # Add trackers from Syncronite.html
-    SYNCRONITE_HTML="$ZERONET_DIR/data/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html"
-    if [ -f "$SYNCRONITE_HTML" ]; then
-        log "Extracting trackers from Syncronite.html..."
-        grep -oP '(?<=announce=)[^&]+' "$SYNCRONITE_HTML" | sort -u >> "$TRACKERS_FILE"
-        log "Added trackers from Syncronite.html to $TRACKERS_FILE"
-    else
-        log "Syncronite.html not found. Skipping additional trackers."
-    fi
-
-    # Deduplicate and clean up the trackers file
-    if [ -f "$TRACKERS_FILE" ]; then
-        sort -u "$TRACKERS_FILE" | grep -v '^$' > "${TRACKERS_FILE}.tmp"
-        mv "${TRACKERS_FILE}.tmp" "$TRACKERS_FILE"
-        log "Trackers list updated and deduplicated."
-    else
-        log_error "Failed to create or update trackers file."
-    fi
+    log_error "Failed to download from any URL. Retrying in 5 seconds..."
+    sleep 5
 }
 
 generate_random_port() {
@@ -385,7 +367,7 @@ ui_ip = 127.0.0.1
 ui_port = 43110
 tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
 tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
-trackers_file = $TRACKERS_FILE
+trackers_file = $TRACKERS_FILE,{data_dir}/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
