@@ -410,41 +410,26 @@ tor -f $HOME/.tor/torrc &
 TOR_PID=$!
 
 log "Waiting for Tor to start and generate the hidden service..."
-
-for i in {1..30}; do
+for i in {1..60}; do  # Increased wait time to 60 seconds
     if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
+        ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
+        log "Onion address generated: $ONION_ADDRESS"
+        # Update ZeroNet configuration
+        sed -i "s/^ip_external =.*/ip_external = $ONION_ADDRESS/" "$ZERONET_DIR/zeronet.conf"
         break
     fi
     sleep 1
 done
 
+if [ -z "$ONION_ADDRESS" ]; then
+    log_error "Failed to retrieve onion address. Check Tor logs for issues."
+    exit 1
+fi
+
 if kill -0 $TOR_PID 2>/dev/null; then
     log "Tor process is still running. Proceeding with hidden service setup."
 else
     log_error "Tor process is not running. There may have been an issue starting Tor."
-    exit 1
-fi
-
-log "Retrieving onion address..."
-if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
-    ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
-    log "Onion address: $ONION_ADDRESS"
-
-    # Update ZeroNet configuration with the onion address
-    log "Updating ZeroNet configuration with onion address..."
-    sed -i "s/^ip_external = .*/ip_external = ${ONION_ADDRESS%$'\n'}.onion/" "$ZERONET_DIR/zeronet.conf"
-    if [ $? -eq 0 ]; then
-        log "Successfully updated ZeroNet configuration with onion address"
-    else
-        log_error "Failed to update ZeroNet configuration with onion address"
-        exit 1
-    fi
-else
-    log_error "Failed to retrieve onion address. Tor hidden service may not have been created properly."
-    log "Contents of the hidden service directory:"
-    ls -la "$HOME/.tor/ZeroNet"
-    log "Last 20 lines of Tor log:"
-    tail -n 20 "$PREFIX/var/log/tor/notices.log"
     exit 1
 fi
 
