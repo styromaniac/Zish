@@ -28,13 +28,7 @@ read -r zeronet_source
 log "Please provide URL, path to users.json, or press Enter to skip:"
 read -r users_json_source
 
-BOOT_SCRIPT="$HOME/.termux/boot/start-zeronet"
-log "This script will create a Termux Boot script at: $BOOT_SCRIPT"
-log "The script will start ZeroNet automatically when your device boots."
-log ""
-log "IMPORTANT: For this to work, you need to have opened Termux:Boot at least once since the last fresh start of Termux."
-log ""
-log "Have you done this? (y/n)"
+log "Do you want to set up auto-start with Termux:Boot? (y/n)"
 read -r boot_setup
 
 update_mirrors() {
@@ -433,8 +427,25 @@ else
     exit 1
 fi
 
+TERMUX_BOOT_DIR="$HOME/.termux/boot"
+BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
+
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
-    cat > "$BOOT_SCRIPT" << EOL
+    # Check if Termux:Boot directory exists, create if it doesn't
+    if [ ! -d "$TERMUX_BOOT_DIR" ]; then
+        log "Termux:Boot directory not found. Creating it..."
+        mkdir -p "$TERMUX_BOOT_DIR"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to create Termux:Boot directory. Make sure Termux:Boot is installed."
+            log "Skipping boot script creation."
+        else
+            log "Termux:Boot directory created successfully."
+        fi
+    fi
+
+    # Only create the boot script if the directory exists
+    if [ -d "$TERMUX_BOOT_DIR" ]; then
+        cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
@@ -469,10 +480,13 @@ start_tor
 start_zeronet
 EOL
 
-    chmod +x "$BOOT_SCRIPT"
-    log "Termux Boot script created at $BOOT_SCRIPT"
+        chmod +x "$BOOT_SCRIPT"
+        log "Termux Boot script created at $BOOT_SCRIPT"
+    else
+        log "Termux:Boot directory not found. Boot script creation skipped."
+    fi
 else
-    log "Please open Termux:Boot once since the last fresh start of Termux, then run this script again to set up auto-start."
+    log "Boot script setup skipped. To set up auto-start later, ensure Termux:Boot is installed and run this script again."
 fi
 
 check_openssl() {
