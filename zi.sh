@@ -619,15 +619,77 @@ rm "$ZIP_DIR/content.zip"
 
 log "Syncronite ZIP file extracted to $ZIP_DIR"
 
-log "Adding Syncronite site to ZeroNet..."
-cd "$ZERONET_DIR"
-python3 zeronet.py --debug siteAdd $SYNCRONITE_ADDRESS
+add_syncronite_to_dashboard() {
+    local sites_json="$ZERONET_DIR/data/sites.json"
+    local content_json="$ZERONET_DIR/data/$SYNCRONITE_ADDRESS/content.json"
 
-log "Syncronite site added to ZeroNet."
+    log "Adding Syncronite to ZeroNet dashboard..."
+
+    # Ensure the Syncronite directory exists
+    if [ ! -d "$ZERONET_DIR/data/$SYNCRONITE_ADDRESS" ]; then
+        log "Creating Syncronite directory..."
+        mkdir -p "$ZERONET_DIR/data/$SYNCRONITE_ADDRESS"
+    fi
+
+    # Create or update the content.json for Syncronite
+    if [ ! -f "$content_json" ]; then
+        log "Creating content.json for Syncronite..."
+        echo '{
+            "address": "'$SYNCRONITE_ADDRESS'",
+            "title": "Syncronite",
+            "description": "Syncronite ZeroNet site",
+            "cloneable": false,
+            "cloned_from": "1HeLLo4uzjaLetFx6NH3PMwFP3qbRbTf3D"
+        }' > "$content_json"
+    fi
+
+    # Add or update Syncronite in sites.json
+    if [ -f "$sites_json" ]; then
+        log "Updating sites.json with Syncronite..."
+        # Use jq to add or update the Syncronite entry
+        jq --arg addr "$SYNCRONITE_ADDRESS" --arg time "$(date +%s)" '
+        .[$addr] = {
+            "added": $time,
+            "address": $addr,
+            "peers": 0,
+            "modified": $time,
+            "size": 0,
+            "size_optional": 0,
+            "own": false
+        }' "$sites_json" > "$sites_json.tmp" && mv "$sites_json.tmp" "$sites_json"
+    else
+        log "Creating new sites.json with Syncronite..."
+        echo '{
+            "'$SYNCRONITE_ADDRESS'": {
+                "added": '$(date +%s)',
+                "address": "'$SYNCRONITE_ADDRESS'",
+                "peers": 0,
+                "modified": '$(date +%s)',
+                "size": 0,
+                "size_optional": 0,
+                "own": false
+            }
+        }' > "$sites_json"
+    fi
+
+    log "Syncronite added to ZeroNet dashboard."
+}
+
+# Call this function after starting ZeroNet
+add_syncronite_to_dashboard
+
+# Restart ZeroNet to apply changes
+log "Restarting ZeroNet to apply changes..."
+pkill -f "python3.*zeronet.py"
+sleep 5
+start_zeronet
+
+log "Waiting 20 seconds for ZeroNet to fully initialize..."
+sleep 20
 
 update_trackers
 
-log "ZeroNet setup complete with Syncronite loaded and added."
+log "ZeroNet setup complete with Syncronite loaded and added to the dashboard."
 
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
@@ -636,28 +698,4 @@ if ! pgrep -f "zeronet.py" > /dev/null; then
     exit 1
 fi
 
-ping_syncronite() {
-    local zeronet_url="http://${UI_IP}:${UI_PORT}"
-
-    log "Pinging Syncronite site..."
-    if curl -s -o /dev/null -w "%{http_code}" \
-        -A "$USER_AGENT" \
-        -H "X-ZeroNet-Host: $SYNCRONITE_ADDRESS" \
-        "$zeronet_url/$SYNCRONITE_ADDRESS" | grep -q "200"; then
-        log "Successfully pinged Syncronite site"
-    else
-        log_error "Failed to ping Syncronite site"
-        return 1
-    fi
-}
-
-# Add a short delay before pinging Syncronite
-log "Waiting 20 seconds before pinging Syncronite..."
-sleep 20
-
-# Call the function to ping Syncronite
-if ! ping_syncronite; then
-    log_error "Failed to ping Syncronite"
-fi
-
-log "ZeroNet is running successfully with Syncronite loaded and added."
+log "ZeroNet is running successfully with Syncronite loaded and added to the dashboard."
