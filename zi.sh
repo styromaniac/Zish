@@ -376,6 +376,7 @@ ui_port = $UI_PORT
 tor_controller = $UI_IP:$TOR_CONTROL_PORT
 tor_proxy = $UI_IP:$TOR_PROXY_PORT
 trackers_file = $TRACKERS_FILE
+ {data_dir}/$SYNCRONITE_ADDRESS/cache/1/Syncronite.html
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
@@ -651,7 +652,8 @@ ping_syncronite() {
 }
 
 # Add a short delay before pinging Syncronite
-sleep 5
+log "Waiting 20 seconds before pinging Syncronite..."
+sleep 20
 
 # Call the function to ping Syncronite
 if ! ping_syncronite; then
