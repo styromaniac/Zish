@@ -28,6 +28,9 @@ read -r zeronet_source
 log "Please provide URL, path to users.json, or press Enter to skip:"
 read -r users_json_source
 
+log "Do you want to set up an onion tracker? This makes ZeroNet stronger. (y/n)"
+read -r onion_tracker_setup
+
 log "Do you want to set up auto-start with Termux:Boot? (y/n)"
 read -r boot_setup
 
@@ -340,20 +343,23 @@ generate_random_port() {
 
     while true; do
         RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
+        
+        # Check if the port is in the excluded list
         if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
             log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
             continue
         fi
-        if netstat -tuln | grep -q ":$RANDOM_PORT "; then
+        
+        # Check if the port is already in use
+        if ! netstat -tuln | grep -q ":$RANDOM_PORT "; then
+            log "Selected available port $RANDOM_PORT for ZeroNet."
+            FILESERVER_PORT=$RANDOM_PORT
+            log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
+            break
+        else
             log "Port $RANDOM_PORT is in use. Generating a new port..."
-            continue
         fi
-        break
     done
-
-    log "Selected port $RANDOM_PORT for ZeroNet."
-    FILESERVER_PORT=$RANDOM_PORT
-    log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
 }
 
 create_zeronet_conf() {
@@ -368,7 +374,6 @@ ui_port = 43110
 tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
 tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
 trackers_file = $TRACKERS_FILE
- {data_dir}/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
@@ -381,17 +386,28 @@ configure_tor() {
     log "Configuring Tor..."
     mkdir -p $HOME/.tor
     mkdir -p $PREFIX/var/log/tor
-    mkdir -p $HOME/.tor/ZeroNet
 
+    # Mandatory configuration
     cat > $HOME/.tor/torrc << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
+Log notice file $PREFIX/var/log/tor/notices.log
+EOL
+
+    # Optional onion service configuration
+    if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
+        mkdir -p $HOME/.tor/ZeroNet
+        cat >> $HOME/.tor/torrc << EOL
 HiddenServiceDir $HOME/.tor/ZeroNet
 HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
-Log notice file $PREFIX/var/log/tor/notices.log
 EOL
+        log "Onion tracker configuration added to Tor configuration"
+    else
+        log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
+    fi
+
     log "Tor configuration created at $HOME/.tor/torrc"
 }
 
@@ -404,25 +420,29 @@ log "Starting Tor service..."
 tor -f $HOME/.tor/torrc &
 TOR_PID=$!
 
-log "Waiting for Tor to start and generate the hidden service..."
-for i in {1..60}; do  # Increased wait time to 60 seconds
-    if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
-        ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
-        log "Onion address generated: $ONION_ADDRESS"
-        # Update ZeroNet configuration
-        sed -i "s/^ip_external =.*/ip_external = $ONION_ADDRESS/" "$ZERONET_DIR/zeronet.conf"
-        break
-    fi
-    sleep 1
-done
+if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
+    log "Waiting for Tor to start and generate the hidden service..."
+    for i in {1..60}; do  # Increased wait time to 60 seconds
+        if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
+            ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
+            log "Onion address generated: $ONION_ADDRESS"
+            # Update ZeroNet configuration
+            sed -i "s/^ip_external =.*/ip_external = $ONION_ADDRESS/" "$ZERONET_DIR/zeronet.conf"
+            break
+        fi
+        sleep 1
+    done
 
-if [ -z "$ONION_ADDRESS" ]; then
-    log_error "Failed to retrieve onion address. Check Tor logs for issues."
-    exit 1
+    if [ -z "$ONION_ADDRESS" ]; then
+        log_error "Failed to retrieve onion address. Check Tor logs for issues."
+        exit 1
+    fi
+else
+    log "Skipping onion address generation as onion tracker setup was not requested"
 fi
 
 if kill -0 $TOR_PID 2>/dev/null; then
-    log "Tor process is still running. Proceeding with hidden service setup."
+    log "Tor process is still running. Proceeding with setup."
 else
     log_error "Tor process is not running. There may have been an issue starting Tor."
     exit 1
@@ -520,11 +540,15 @@ start_zeronet() {
         rm "$LOCK_FILE"
     fi
 
-    if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
-        mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
-        log "Renamed disabled-Bootstrapper to Bootstrapper"
+    if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
+        if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
+            mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
+            log "Renamed disabled-Bootstrapper to Bootstrapper"
+        else
+            log "disabled-Bootstrapper directory not found"
+        fi
     else
-        log "disabled-Bootstrapper directory not found"
+        log "Skipping renaming of disabled-Bootstrapper folder"
     fi
 
     # Add a small delay before starting ZeroNet
