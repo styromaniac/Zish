@@ -622,28 +622,34 @@ python3 zeronet.py --debug siteAdd 15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o
 add_syncronite_to_sites() {
     local sites_file="$ZERONET_DIR/data/sites.json"
     local syncronite_address="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
-    local syncronite_entry='{
-        "'$syncronite_address'": {
-            "address": "'$syncronite_address'",
-            "auth_address": "'$syncronite_address'",
-            "added": "'$(date +%s)'",
-            "modified": "'$(date +%s)'",
-            "peers": 0
-        }
-    }'
-
-    # Check if sites.json exists, otherwise create it
-    if [ ! -f "$sites_file" ]; then
-        log "Creating new sites.json file..."
-        echo "{}" > "$sites_file"
-    fi
-
-    # Insert the Syncronite entry into the sites.json
-    log "Adding Syncronite site to sites.json..."
-    jq ". += $syncronite_entry" "$sites_file" > "$sites_file.tmp" && mv "$sites_file.tmp" "$sites_file"
-
-    log "Syncronite site successfully added to sites.json"
+    local current_time=$(date +%s)
+    
+    # Create a new JSON object with only the Syncronite entry
+    cat > "$sites_file" << EOL
+{
+    "$syncronite_address": {
+        "address": "$syncronite_address",
+        "auth_address": "$syncronite_address",
+        "added": $current_time,
+        "modified": $current_time,
+        "peers": 0
+    }
 }
+EOL
+
+    if [ $? -eq 0 ]; then
+        log "Successfully created/overwrote sites.json with Syncronite entry"
+        chmod 644 "$sites_file"
+    else
+        log_error "Failed to create/overwrite sites.json"
+        return 1
+    fi
+}
+
+# Call the function to add Syncronite to sites.json
+if ! add_syncronite_to_sites; then
+    log_error "Failed to add Syncronite to sites.json"
+fi
 
 # Call the function to add Syncronite to sites.json
 add_syncronite_to_sites
