@@ -569,6 +569,34 @@ start_zeronet() {
     fi
 }
 
+# Download and unpack the GeoLite2 City database after the first ZeroNet shutdown and before the next run
+
+log "Downloading GeoLite2 City database..."
+
+GEOIP_DB_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
+GEOIP_DB_PATH="$ZERONET_DIR/data/GeoLite2-City.mmdb"
+
+download_geoip_database() {
+    while true; do
+        log "Attempting to download GeoLite2 City database..."
+        if curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+            -H "Accept: application/octet-stream" \
+            -s -f -L "$GEOIP_DB_URL" -o "${GEOIP_DB_PATH}.gz"; then
+            log "Successfully downloaded GeoLite2 City database."
+            gunzip -f "${GEOIP_DB_PATH}.gz"
+            chmod 644 "$GEOIP_DB_PATH"
+            log "GeoLite2 City database unpacked and ready at $GEOIP_DB_PATH"
+            break
+        else
+            log "Failed to download GeoLite2 City database. Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+}
+
+# Call the function to download and unpack the GeoLite2 City database
+download_geoip_database
+
 check_openssl
 log "Starting ZeroNet..."
 start_zeronet
