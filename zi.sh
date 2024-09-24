@@ -28,7 +28,7 @@ read -r zeronet_source
 log "Please provide URL, path to users.json, or press Enter to skip:"
 read -r users_json_source
 
-log "Do you want to set up an onion tracker? This makes ZeroNet stronger. (y/n)"
+log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
 read -r onion_tracker_setup
 
 log "Do you want to set up auto-start with Termux:Boot? (y/n)"
