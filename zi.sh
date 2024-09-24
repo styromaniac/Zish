@@ -619,6 +619,35 @@ log "Adding Syncronite site to ZeroNet..."
 cd "$ZERONET_DIR"
 python3 zeronet.py --debug siteAdd 15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o
 
+add_syncronite_to_sites() {
+    local sites_file="$ZERONET_DIR/data/sites.json"
+    local syncronite_address="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+    local syncronite_entry='{
+        "'$syncronite_address'": {
+            "address": "'$syncronite_address'",
+            "auth_address": "'$syncronite_address'",
+            "added": "'$(date +%s)'",
+            "modified": "'$(date +%s)'",
+            "peers": 0
+        }
+    }'
+
+    # Check if sites.json exists, otherwise create it
+    if [ ! -f "$sites_file" ]; then
+        log "Creating new sites.json file..."
+        echo "{}" > "$sites_file"
+    fi
+
+    # Insert the Syncronite entry into the sites.json
+    log "Adding Syncronite site to sites.json..."
+    jq ". += $syncronite_entry" "$sites_file" > "$sites_file.tmp" && mv "$sites_file.tmp" "$sites_file"
+
+    log "Syncronite site successfully added to sites.json"
+}
+
+# Call the function to add Syncronite to sites.json
+add_syncronite_to_sites
+
 log "Syncronite site added to ZeroNet."
 
 update_trackers
