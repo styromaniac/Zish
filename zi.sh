@@ -11,6 +11,10 @@ LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
 TOR_PROXY_PORT=49050
 TOR_CONTROL_PORT=49051
+UI_IP="127.0.0.1"
+UI_PORT=43110
+SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -320,11 +324,9 @@ update_trackers() {
         "https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/best.txt"
     )
 
-    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
-        if curl -A "$user_agent" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
+        if curl -A "$USER_AGENT" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
             log "Successfully downloaded tracker list from $tracker_url"
             chmod 644 "$TRACKERS_FILE"
             return
@@ -369,12 +371,11 @@ create_zeronet_conf() {
 [global]
 data_dir = $ZERONET_DIR/data
 log_dir = $PREFIX/var/log/zeronet
-ui_ip = 127.0.0.1
-ui_port = 43110
-tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
-tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
-trackers_file = /data/data/com.termux/files/home/apps/zeronet/trackers.txt
- {data_dir}/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o/cache/1/Syncronite.html
+ui_ip = $UI_IP
+ui_port = $UI_PORT
+tor_controller = $UI_IP:$TOR_CONTROL_PORT
+tor_proxy = $UI_IP:$TOR_PROXY_PORT
+trackers_file = $TRACKERS_FILE
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
@@ -389,7 +390,7 @@ configure_tor() {
     mkdir -p $PREFIX/var/log/tor
 
     # Mandatory configuration
-    cat > $HOME/.tor/torrc << EOL
+    cat > $TORRC_FILE << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
@@ -399,7 +400,7 @@ EOL
     # Optional onion service configuration
     if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
         mkdir -p $HOME/.tor/ZeroNet
-        cat >> $HOME/.tor/torrc << EOL
+        cat >> $TORRC_FILE << EOL
 HiddenServiceDir $HOME/.tor/ZeroNet
 HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
@@ -409,7 +410,7 @@ EOL
         log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
     fi
 
-    log "Tor configuration created at $HOME/.tor/torrc"
+    log "Tor configuration created at $TORRC_FILE"
 }
 
 update_trackers
@@ -418,7 +419,7 @@ create_zeronet_conf
 configure_tor
 
 log "Starting Tor service..."
-tor -f $HOME/.tor/torrc &
+tor -f $TORRC_FILE &
 TOR_PID=$!
 
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
@@ -471,8 +472,8 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
-ZERONET_DIR="$HOME/apps/zeronet"
-TORRC_FILE="$HOME/.tor/torrc"
+ZERONET_DIR="$ZERONET_DIR"
+TORRC_FILE="$TORRC_FILE"
 
 export PATH=\$PATH:\$PREFIX/bin
 export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
@@ -579,7 +580,7 @@ GEOIP_DB_PATH="$ZERONET_DIR/data/GeoLite2-City.mmdb"
 download_geoip_database() {
     while true; do
         log "Attempting to download GeoLite2 City database..."
-        if curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+        if curl -A "$USER_AGENT" \
             -H "Accept: application/octet-stream" \
             -s -f -L "$GEOIP_DB_URL" -o "${GEOIP_DB_PATH}.gz"; then
             log "Successfully downloaded GeoLite2 City database."
@@ -605,8 +606,8 @@ log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
 
 log "Downloading and extracting Syncronite ZIP file..."
-ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
-ZIP_DIR="$ZERONET_DIR/data/15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=$SYNCRONITE_ADDRESS"
+ZIP_DIR="$ZERONET_DIR/data/$SYNCRONITE_ADDRESS"
 
 mkdir -p "$ZIP_DIR"
 curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"
@@ -617,42 +618,7 @@ log "Syncronite ZIP file extracted to $ZIP_DIR"
 
 log "Adding Syncronite site to ZeroNet..."
 cd "$ZERONET_DIR"
-python3 zeronet.py --debug siteAdd 15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o
-
-add_syncronite_to_sites() {
-    local sites_file="$ZERONET_DIR/data/sites.json"
-    local syncronite_address="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
-    local current_time=$(date +%s)
-    
-    # Create a new JSON object with only the Syncronite entry
-    cat > "$sites_file" << EOL
-{
-    "$syncronite_address": {
-        "address": "$syncronite_address",
-        "auth_address": "$syncronite_address",
-        "added": $current_time,
-        "modified": $current_time,
-        "peers": 0
-    }
-}
-EOL
-
-    if [ $? -eq 0 ]; then
-        log "Successfully created/overwrote sites.json with Syncronite entry"
-        chmod 644 "$sites_file"
-    else
-        log_error "Failed to create/overwrite sites.json"
-        return 1
-    fi
-}
-
-# Call the function to add Syncronite to sites.json
-if ! add_syncronite_to_sites; then
-    log_error "Failed to add Syncronite to sites.json"
-fi
-
-# Call the function to add Syncronite to sites.json
-add_syncronite_to_sites
+python3 zeronet.py --debug siteAdd $SYNCRONITE_ADDRESS
 
 log "Syncronite site added to ZeroNet."
 
@@ -665,6 +631,29 @@ if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
     termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
     exit 1
+fi
+
+ping_syncronite() {
+    local zeronet_url="http://${UI_IP}:${UI_PORT}"
+
+    log "Pinging Syncronite site..."
+    if curl -s -o /dev/null -w "%{http_code}" \
+        -A "$USER_AGENT" \
+        -H "X-ZeroNet-Host: $SYNCRONITE_ADDRESS" \
+        "$zeronet_url/$SYNCRONITE_ADDRESS" | grep -q "200"; then
+        log "Successfully pinged Syncronite site"
+    else
+        log_error "Failed to ping Syncronite site"
+        return 1
+    fi
+}
+
+# Add a short delay before pinging Syncronite
+sleep 5
+
+# Call the function to ping Syncronite
+if ! ping_syncronite; then
+    log_error "Failed to ping Syncronite"
 fi
 
 log "ZeroNet is running successfully with Syncronite loaded and added."
