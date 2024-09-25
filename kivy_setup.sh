@@ -36,6 +36,13 @@ install_package() {
 log "Updating package lists..."
 yes | pkg update || log_error "Failed to update package lists"
 
+# Enable X11 repository
+log "Enabling X11 repository..."
+yes | pkg install x11-repo || log_error "Failed to enable X11 repository"
+
+# Update package lists again after adding new repository
+yes | pkg update || log_error "Failed to update package lists after adding X11 repo"
+
 # Install required packages
 required_packages=(
     python
