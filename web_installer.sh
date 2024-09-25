@@ -8,6 +8,25 @@ termux-change-repo
 
 termux-setup-storage
 
+ZERONET_DIR="$HOME/apps/zeronet"
+LOG_FILE="$HOME/zeronet_install.log"
+TORRC_FILE="$HOME/.tor/torrc"
+TOR_PROXY_PORT=49050
+TOR_CONTROL_PORT=49051
+UI_IP="127.0.0.1"
+UI_PORT=43110
+SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
+USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    log "[ERROR] $1"
+    exit 1
+}
+
 start_web_installer() {
     log "Setting up web installer..."
     pkg install -y python || log_error "Failed to install Python"
@@ -57,7 +76,7 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
 
     def install_zeronet(self, params):
         inputs = f"{params['zeronet_source'][0]}\\n{params['users_json'][0]}\\n{params['onion_tracker'][0]}\\n{params['boot_setup'][0]}\\n"
-        command = f"bash -c 'source $0 && main' <<< '{inputs}'"
+        command = f"bash -c 'source $0 && main <<< \"{inputs}\"'"
         subprocess.run(command, shell=True)
 
 # Create HTML file
@@ -123,6 +142,23 @@ END
     wait
 }
 
+main() {
+    # User prompts
+    log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
+    read -r zeronet_source
+
+    log "Please provide URL, path to users.json, or press Enter to skip:"
+    read -r users_json_source
+
+    log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
+    read -r onion_tracker_setup
+
+    log "Do you want to set up auto-start with Termux:Boot? (y/n)"
+    read -r boot_setup
+
+    # ... (rest of the installation logic)
+}
+
 # Check if script is sourced or run directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     if [ "$1" = "web" ]; then
@@ -132,7 +168,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     fi
 fi
 
-# Your existing zi.sh content starts here
+# The rest of your existing zi.sh content goes here
 
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
