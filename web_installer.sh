@@ -1,3 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
 set -e
 
 termux-wake-lock
@@ -6,15 +8,12 @@ termux-change-repo
 
 termux-setup-storage
 
-#!/data/data/com.termux/files/usr/bin/bash
-
-set -e
-
 start_web_installer() {
     log "Setting up web installer..."
     pkg install -y python || log_error "Failed to install Python"
 
-    python - << END
+    # Start the Python server in the background
+    python - << END &
 import http.server
 import socketserver
 import urllib.parse
@@ -67,6 +66,8 @@ with open('installer.html', 'w') as f:
     <!DOCTYPE html>
     <html>
     <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>ZeroNet Installer</title>
         <style>
             body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
@@ -108,10 +109,18 @@ Handler = InstallerHandler
 
 with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
     print(f"Server started at http://127.0.0.1:{PORT}")
-    print("Use 'termux-open-url http://127.0.0.1:8000' to open in browser")
-    print("Press Ctrl+C to stop the server")
     httpd.serve_forever()
 END
+
+    # Give the server a moment to start
+    sleep 2
+
+    # Open the URL in the default browser
+    termux-open-url http://127.0.0.1:8000
+
+    # Wait for the user to stop the server
+    echo "Press Ctrl+C to stop the server"
+    wait
 }
 
 # Check if script is sourced or run directly
