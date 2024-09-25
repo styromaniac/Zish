@@ -16,13 +16,18 @@ log "Setting up environment..."
 pkg update -y || log_error "Failed to update packages"
 pkg upgrade -y || log_error "Failed to upgrade packages"
 pkg install -y python python-pip build-essential || log_error "Failed to install required packages"
-pip install Cython || log_error "Failed to install Cython"
-CPPFLAGS="-I/data/data/com.termux/files/usr/include" LDFLAGS="-L/data/data/com.termux/files/usr/lib" pip install kivy || log_error "Failed to install Kivy"
+
+# Use system pip to install Cython and Kivy
+log "Installing Cython..."
+python -m pip install Cython || log_error "Failed to install Cython"
+
+log "Installing Kivy..."
+CPPFLAGS="-I/data/data/com.termux/files/usr/include" LDFLAGS="-L/data/data/com.termux/files/usr/lib" python -m pip install kivy || log_error "Failed to install Kivy"
 
 log "Environment setup complete. Starting Kivy installer..."
 
 # Kivy installer part
-python3 - << END
+python - << END
 import os
 import subprocess
 import threading
