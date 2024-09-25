@@ -17,16 +17,13 @@ pkg update -y || log_error "Failed to update packages"
 pkg upgrade -y || log_error "Failed to upgrade packages"
 pkg install -y python python-pip build-essential wget || log_error "Failed to install required packages"
 
-# Install Kivy dependencies
-log "Installing Kivy dependencies..."
-pkg install -y sdl2 sdl2_image sdl2_mixer sdl2_ttf || log_error "Failed to install SDL2 packages"
+# Install Cython (required for Kivy)
+log "Installing Cython..."
+python -m pip install Cython || log_error "Failed to install Cython"
 
-# Download and install pre-built Kivy wheel
-log "Downloading and installing Kivy..."
-KIVY_WHEEL_URL="https://github.com/kivy/kivy/releases/download/2.2.1/Kivy-2.2.1-cp311-cp311-android_aarch64.whl"
-wget $KIVY_WHEEL_URL -O kivy.whl || log_error "Failed to download Kivy wheel"
-python -m pip install kivy.whl || log_error "Failed to install Kivy"
-rm kivy.whl
+# Install Kivy with minimal dependencies
+log "Installing Kivy..."
+KIVY_NO_CONSOLELOG=1 KIVY_NO_FILELOG=1 KIVY_NO_ARGS=1 python -m pip install kivy || log_error "Failed to install Kivy"
 
 log "Environment setup complete. Starting Kivy installer..."
 
