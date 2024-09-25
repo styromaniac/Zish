@@ -1,13 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
-
 set -e
-
 termux-wake-lock
-
 termux-change-repo
-
 termux-setup-storage
-
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
@@ -17,20 +12,16 @@ UI_IP="127.0.0.1"
 UI_PORT=43110
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
-
 log_error() {
     log "[ERROR] $1"
     exit 1
 }
-
 start_web_installer() {
     log "Setting up web installer..."
     pkg install -y python || log_error "Failed to install Python"
-
     # Start the Python server in the background
     python - << END &
 import http.server
@@ -40,7 +31,6 @@ import subprocess
 import threading
 import json
 import os
-
 class InstallerHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/':
@@ -61,7 +51,6 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({'status': content}).encode())
         else:
             self.send_error(404)
-
     def do_POST(self):
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length).decode('utf-8')
@@ -73,12 +62,10 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b"Installation started")
-
     def install_zeronet(self, params):
         inputs = f"{params['zeronet_source'][0]}\\n{params['users_json'][0]}\\n{params['onion_tracker'][0]}\\n{params['boot_setup'][0]}\\n"
         command = f"bash -c 'source $0 && main <<< \"{inputs}\"'"
         subprocess.run(command, shell=True)
-
 # Create HTML file
 with open('installer.html', 'w') as f:
     f.write('''
@@ -122,43 +109,32 @@ with open('installer.html', 'w') as f:
     </body>
     </html>
     ''')
-
 PORT = 8000
 Handler = InstallerHandler
-
 with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
     print(f"Server started at http://127.0.0.1:{PORT}")
     httpd.serve_forever()
 END
-
     # Give the server a moment to start
     sleep 2
-
     # Open the URL in the default browser
     termux-open-url http://127.0.0.1:8000
-
     # Wait for the user to stop the server
     echo "Press Ctrl+C to stop the server"
     wait
 }
-
 main() {
     # User prompts
     log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
     read -r zeronet_source
-
     log "Please provide URL, path to users.json, or press Enter to skip:"
     read -r users_json_source
-
     log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
     read -r onion_tracker_setup
-
     log "Do you want to set up auto-start with Termux:Boot? (y/n)"
     read -r boot_setup
-
     # ... (rest of the installation logic)
 }
-
 # Check if script is sourced or run directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     if [ "$1" = "web" ]; then
@@ -167,9 +143,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         main
     fi
 fi
-
 # The rest of your existing zi.sh content goes here
-
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
@@ -179,29 +153,22 @@ UI_IP="127.0.0.1"
 UI_PORT=43110
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
-
 log_error() {
     log "[ERROR] $1"
     exit 1
 }
-
 # User prompts
 log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
 read -r zeronet_source
-
 log "Please provide URL, path to users.json, or press Enter to skip:"
 read -r users_json_source
-
 log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
 read -r onion_tracker_setup
-
 log "Do you want to set up auto-start with Termux:Boot? (y/n)"
 read -r boot_setup
-
 update_mirrors() {
     local max_attempts=5
     local attempt=1
@@ -222,18 +189,14 @@ update_mirrors() {
     log_error "Failed to update package lists after $max_attempts attempts."
     return 1
 }
-
 update_mirrors || exit 1
-
 yes | pkg upgrade
-
 required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl jq rust openssl-tool net-tools
 )
-
 install_package() {
     local package=$1
     local max_attempts=3
@@ -254,28 +217,21 @@ install_package() {
     log_error "Failed to install $package after $max_attempts attempts."
     return 1
 }
-
 for package in "${required_packages[@]}"; do
     if ! dpkg -s "$package" >/dev/null 2>&1; then
         install_package "$package" || exit 1
     fi
 done
-
 log "Installing OpenSSL from Termux repository..."
 yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
-
 log "OpenSSL installation completed."
-
 install_python_packages() {
     log "Installing required Python packages..."
     export CFLAGS="-I$PREFIX/include"
     export LDFLAGS="-L$PREFIX/lib"
-
     pip install --upgrade pip setuptools wheel
-
     MAX_RETRIES=3
     RETRY_DELAY=10
-
     install_package_with_retry() {
         local package=$1
         local retries=0
@@ -299,7 +255,6 @@ install_python_packages() {
         log_error "Failed to install $package after $MAX_RETRIES attempts."
         return 1
     }
-
     # Try different installation methods
     install_package_with_fallbacks() {
         local package=$1
@@ -320,7 +275,6 @@ install_python_packages() {
         fi
         return 0
     }
-
     install_package_with_fallbacks greenlet || return 1
     install_package_with_fallbacks gevent || return 1
     install_package_with_fallbacks pycryptodome || return 1
@@ -329,29 +283,22 @@ install_python_packages() {
     install_package_with_fallbacks cffi || return 1
     install_package_with_fallbacks six || return 1
     install_package_with_fallbacks idna || return 1
-
     log "Verifying installations..."
     python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
-
 install_python_packages || exit 1
-
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
     log "Proceeding to adjust permissions and clean the directory."
     chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
     rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
 fi
-
 mkdir -p "$ZERONET_DIR"
-
 WORK_DIR="$(mktemp -d "$HOME/tmp.XXXXXX")"
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
-
 download_with_retries() {
     local url=$1
     local output_file=$2
-
     while true; do
         log "Attempting to download $url..."
         if curl -s -f -L "$url" -o "$output_file"; then
@@ -364,11 +311,9 @@ download_with_retries() {
         fi
     done
 }
-
 git_clone_with_retries() {
     local repo_url=$1
     local target_dir=$2
-
     while true; do
         log "Attempting to clone $repo_url..."
         if git clone "$repo_url" "$target_dir"; then
@@ -381,7 +326,6 @@ git_clone_with_retries() {
         fi
     done
 }
-
 if [[ "$zeronet_source" == http*".git" ]]; then
     git_clone_with_retries "$zeronet_source" "zeronet_repo"
     base_dir="$WORK_DIR/zeronet_repo"
@@ -420,30 +364,21 @@ else
     log_error "Invalid input. Please provide a valid Git URL, ZIP URL, or file path."
     exit 1
 fi
-
 log "Adjusting ownership of files before moving..."
 chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
-
 log "Moving extracted files to $ZERONET_DIR..."
 mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
-
 rm -rf "$WORK_DIR"
-
 if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
     log_error "zeronet.py not found in the expected directory."
     exit 1
 fi
-
 cd "$ZERONET_DIR" || exit 1
-
 if [ ! -d "$ZERONET_DIR/venv" ]; then
     python3 -m venv "$ZERONET_DIR/venv"
 fi
-
 source "$ZERONET_DIR/venv/bin/activate"
-
 chmod -R u+rwX "$ZERONET_DIR"
-
 if [ -f requirements.txt ]; then
     chmod 644 requirements.txt
     if ! pip install -r requirements.txt; then
@@ -451,10 +386,8 @@ if [ -f requirements.txt ]; then
         exit 1
     fi
 fi
-
 mkdir -p ./data
 chmod -R u+rwX ./data
-
 if [[ "$users_json_source" == http* ]]; then
     mkdir -p data
     download_with_retries "$users_json_source" "data/users.json"
@@ -468,14 +401,10 @@ elif [ -n "$users_json_source" ]; then
         exit 1
     fi
 fi
-
 mkdir -p ./data
 chmod -R u+rwX ./data
-
 mkdir -p $PREFIX/var/log/
-
 TRACKERS_FILE="$ZERONET_DIR/trackers.txt"
-
 update_trackers() {
     log "Updating trackers list..."
     trackers_urls=(
@@ -487,7 +416,6 @@ update_trackers() {
         "https://cdn.statically.io/gh/XIU2/TrackersListCollection/best.txt"
         "https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/best.txt"
     )
-
     for tracker_url in "${trackers_urls[@]}"; do
         log "Attempting to download tracker list from $tracker_url..."
         if curl -A "$USER_AGENT" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
@@ -501,12 +429,9 @@ update_trackers() {
     log_error "Failed to download from any URL. Retrying in 5 seconds..."
     sleep 5
 }
-
 generate_random_port() {
     log "Generating a random, collision-free port number for ZeroNet..."
-
     EXCLUDED_PORTS=($TOR_PROXY_PORT $TOR_CONTROL_PORT)
-
     while true; do
         RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
         
@@ -527,10 +452,8 @@ generate_random_port() {
         fi
     done
 }
-
 create_zeronet_conf() {
     local conf_file="$ZERONET_DIR/zeronet.conf"
-
     cat > "$conf_file" << EOL
 [global]
 data_dir = $ZERONET_DIR/data
@@ -548,12 +471,10 @@ ip_external =
 EOL
     log "ZeroNet configuration file created at $conf_file with security settings"
 }
-
 configure_tor() {
     log "Configuring Tor..."
     mkdir -p $HOME/.tor
     mkdir -p $PREFIX/var/log/tor
-
     # Mandatory configuration
     cat > $TORRC_FILE << EOL
 SocksPort $TOR_PROXY_PORT
@@ -561,7 +482,6 @@ ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
 Log notice file $PREFIX/var/log/tor/notices.log
 EOL
-
     # Optional onion service configuration
     if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
         mkdir -p $HOME/.tor/ZeroNet
@@ -574,19 +494,15 @@ EOL
     else
         log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
     fi
-
     log "Tor configuration created at $TORRC_FILE"
 }
-
 update_trackers
 generate_random_port
 create_zeronet_conf
 configure_tor
-
 log "Starting Tor service..."
 tor -f $TORRC_FILE &
 TOR_PID=$!
-
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
     log "Waiting for Tor to start and generate the hidden service..."
     for i in {1..60}; do  # Increased wait time to 60 seconds
@@ -599,7 +515,6 @@ if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
         fi
         sleep 1
     done
-
     if [ -z "$ONION_ADDRESS" ]; then
         log_error "Failed to retrieve onion address. Check Tor logs for issues."
         exit 1
@@ -607,17 +522,14 @@ if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
 else
     log "Skipping onion address generation as onion tracker setup was not requested"
 fi
-
 if kill -0 $TOR_PID 2>/dev/null; then
     log "Tor process is still running. Proceeding with setup."
 else
     log_error "Tor process is not running. There may have been an issue starting Tor."
     exit 1
 fi
-
 TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
-
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
     # Check if Termux:Boot directory exists, create if it doesn't
     if [ ! -d "$TERMUX_BOOT_DIR" ]; then
@@ -630,21 +542,17 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
             log "Termux:Boot directory created successfully."
         fi
     fi
-
     # Only create the boot script if the directory exists
     if [ -d "$TERMUX_BOOT_DIR" ]; then
         cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
-
 ZERONET_DIR="$ZERONET_DIR"
 TORRC_FILE="$TORRC_FILE"
 UI_IP="$UI_IP"
 UI_PORT="$UI_PORT"
-
 export PATH=\$PATH:\$PREFIX/bin
 export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
-
 start_tor() {
     tor -f "\$TORRC_FILE" &
     # Wait until Tor is ready
@@ -655,21 +563,17 @@ start_tor() {
         sleep 1
     done
 }
-
 start_zeronet() {
     cd "\$ZERONET_DIR"
     . ./venv/bin/activate
     python3 zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
-
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID \$ZERONET_PID" --ongoing
 }
-
 start_tor
 start_zeronet
 EOL
-
         chmod +x "$BOOT_SCRIPT"
         log "Termux Boot script created at $BOOT_SCRIPT"
     else
@@ -678,7 +582,6 @@ EOL
 else
     log "Boot script setup skipped. To set up auto-start later, ensure Termux:Boot is installed and run this script again."
 fi
-
 check_openssl() {
     if command -v openssl >/dev/null 2>&1; then
         log "OpenSSL is available. Version: $(openssl version)"
@@ -687,28 +590,23 @@ check_openssl() {
         exit 1
     fi
 }
-
 start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
-
     # Add Termux bin to PATH
     export PATH=$PATH:$PREFIX/bin
-
     # Check for existing ZeroNet processes
     if pgrep -f "python3.*zeronet.py" > /dev/null; then
         log "Existing ZeroNet process found. Terminating..."
         pkill -f "python3.*zeronet.py"
         sleep 5  # Wait for the process to terminate
     fi
-
     # Remove lock file if it exists
     LOCK_FILE="$ZERONET_DIR/data/lock.pid"
     if [ -f "$LOCK_FILE" ]; then
         log "Removing stale lock file..."
         rm "$LOCK_FILE"
     fi
-
     if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
         if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
             mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
@@ -719,16 +617,13 @@ start_zeronet() {
     else
         log "Skipping renaming of disabled-Bootstrapper folder"
     fi
-
     # Add a small delay before starting ZeroNet
     sleep 2
-
     # Start ZeroNet with the updated PATH
     python3 zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
-
     # Wait a moment to check if the process is still running
     sleep 5
     if ! ps -p $ZERONET_PID > /dev/null; then
@@ -736,14 +631,10 @@ start_zeronet() {
         exit 1
     fi
 }
-
 # Download and unpack the GeoLite2 City database after the first ZeroNet shutdown and before the next run
-
 log "Downloading GeoLite2 City database..."
-
 GEOIP_DB_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
 GEOIP_DB_PATH="$ZERONET_DIR/data/GeoLite2-City.mmdb"
-
 download_geoip_database() {
     while true; do
         log "Attempting to download GeoLite2 City database..."
@@ -761,22 +652,17 @@ download_geoip_database() {
         fi
     done
 }
-
 # Call the function to download and unpack the GeoLite2 City database
 download_geoip_database
-
 check_openssl
 log "Starting ZeroNet..."
 start_zeronet
-
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
-
 download_syncronite() {
     log "Downloading Syncronite content..."
     ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=$SYNCRONITE_ADDRESS"
     ZIP_DIR="$ZERONET_DIR/data/$SYNCRONITE_ADDRESS"
-
     mkdir -p "$ZIP_DIR"
     if curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"; then
         unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
@@ -788,31 +674,25 @@ download_syncronite() {
         return 1
     fi
 }
-
 provide_syncronite_instructions() {
     log "To add Syncronite to your ZeroNet:"
     log "1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS"
     log "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
     log "Note: Only open links to ZeroNet sites that you trust."
 }
-
 if download_syncronite; then
     log "Syncronite content is now available in your ZeroNet data directory."
     provide_syncronite_instructions
 else
     log_error "Failed to prepare Syncronite content. You may need to add it manually later."
 fi
-
 update_trackers
-
 log "ZeroNet setup complete."
-
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
     termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
     exit 1
 fi
-
 log "ZeroNet is running successfully. Syncronite content is available."
 provide_syncronite_instructions
