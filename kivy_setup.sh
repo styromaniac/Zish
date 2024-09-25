@@ -48,19 +48,24 @@ required_packages=(
     python
     python-pip
     libjpeg-turbo
-    libsdl2
-    libsdl2-image
-    libsdl2-mixer
-    libsdl2-ttf
+    sdl2
+    sdl2-image
+    sdl2-mixer
+    sdl2-ttf
+    build-essential
 )
 
 for package in "${required_packages[@]}"; do
     install_package "$package"
 done
 
+# Install Cython (required for Kivy)
+log "Installing Cython..."
+pip install Cython || log_error "Failed to install Cython"
+
 # Install Kivy
 log "Installing Kivy..."
-pip install kivy || log_error "Failed to install Kivy"
+LDFLAGS="-L/system/lib64/" CFLAGS="-I/data/data/com.termux/files/usr/include" pip install kivy || log_error "Failed to install Kivy"
 
 # Download the Kivy installer script
 log "Downloading Kivy installer script..."
