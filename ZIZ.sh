@@ -2,8 +2,7 @@
 
 termux-wake-lock
 
-# Ensure Zenity is installed
-pkg install -y zenity
+termux-change-repo
 
 termux-setup-storage
 
@@ -19,26 +18,19 @@ USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
-    zenity --info --title="ZeroNet Setup" --text="$1" --width=300
 }
 
 log_error() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [ERROR] $1" | tee -a "$LOG_FILE"
-    zenity --error --title="ZeroNet Setup Error" --text="$1" --width=300
+    log "[ERROR] $1"
+    termux-dialog confirm -t "Error" -i "$1"
     exit 1
 }
 
-# User prompts using Zenity
-zeronet_source=$(zenity --entry --title="ZeroNet Source" --text="Enter the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):" --width=400)
-if [ -z "$zeronet_source" ]; then
-    log_error "No ZeroNet source provided. Exiting."
-fi
-
-users_json_source=$(zenity --entry --title="users.json Source" --text="Enter URL or path to users.json, or leave blank to skip:" --width=400)
-
-onion_tracker_setup=$(zenity --question --title="Onion Tracker Setup" --text="Do you want to set up an onion tracker? This will strengthen ZeroNet." --ok-label="Yes" --cancel-label="No" && echo "y" || echo "n")
-
-boot_setup=$(zenity --question --title="Auto-start Setup" --text="Do you want to set up auto-start with Termux:Boot?" --ok-label="Yes" --cancel-label="No" && echo "y" || echo "n")
+# User prompts
+zeronet_source=$(termux-dialog text -t "ZeroNet Source" -i "Enter the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):" | jq -r '.text')
+users_json_source=$(termux-dialog text -t "users.json Source" -i "Enter URL or path to users.json, or press Enter to skip:" | jq -r '.text')
+onion_tracker_setup=$(termux-dialog confirm -t "Onion Tracker Setup" -i "Do you want to set up an onion tracker? This will strengthen ZeroNet." | jq -r '.text')
+boot_setup=$(termux-dialog confirm -t "Auto-start Setup" -i "Do you want to set up auto-start with Termux:Boot?" | jq -r '.text')
 
 update_mirrors() {
     local max_attempts=5
@@ -61,6 +53,17 @@ update_mirrors() {
     return 1
 }
 
+update_mirrors || exit 1
+
+yes | pkg upgrade
+
+required_packages=(
+    termux-tools termux-keyring python
+    netcat-openbsd binutils git cmake libffi
+    curl unzip libtool automake autoconf pkg-config findutils
+    clang make termux-api tor perl jq rust openssl-tool net-tools
+)
+
 install_package() {
     local package=$1
     local max_attempts=3
@@ -82,12 +85,16 @@ install_package() {
     return 1
 }
 
-required_packages=(
-    termux-tools termux-keyring python
-    netcat-openbsd binutils git cmake libffi
-    curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq rust openssl-tool net-tools
-)
+for package in "${required_packages[@]}"; do
+    if ! dpkg -s "$package" >/dev/null 2>&1; then
+        install_package "$package" || exit 1
+    fi
+done
+
+log "Installing OpenSSL from Termux repository..."
+yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
+
+log "OpenSSL installation completed."
 
 install_python_packages() {
     log "Installing required Python packages..."
@@ -112,7 +119,9 @@ install_python_packages() {
                 if [ $retries -lt $MAX_RETRIES ]; then
                     log "Retrying in $RETRY_DELAY seconds..."
                     sleep $RETRY_DELAY
+                    # Kill any hanging processes
                     pkill -f "pip install"
+                    # Clean up temporary directories
                     rm -rf /tmp/pip-*
                 fi
             fi
@@ -121,6 +130,7 @@ install_python_packages() {
         return 1
     }
 
+    # Try different installation methods
     install_package_with_fallbacks() {
         local package=$1
         if ! install_package_with_retry $package; then
@@ -153,6 +163,20 @@ install_python_packages() {
     log "Verifying installations..."
     python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
+
+install_python_packages || exit 1
+
+if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
+    log "The directory $ZERONET_DIR already exists and is not empty."
+    log "Proceeding to adjust permissions and clean the directory."
+    chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
+    rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
+fi
+
+mkdir -p "$ZERONET_DIR"
+
+WORK_DIR="$(mktemp -d "$HOME/tmp.XXXXXX")"
+cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 
 download_with_retries() {
     local url=$1
@@ -188,106 +212,97 @@ git_clone_with_retries() {
     done
 }
 
-setup_zeronet() {
-    if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
-        log "The directory $ZERONET_DIR already exists and is not empty."
-        log "Proceeding to adjust permissions and clean the directory."
-        chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
-        rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
+if [[ "$zeronet_source" == http*".git" ]]; then
+    git_clone_with_retries "$zeronet_source" "zeronet_repo"
+    base_dir="$WORK_DIR/zeronet_repo"
+elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".tar.gz" ]]; then
+    download_with_retries "$zeronet_source" "zeronet_archive"
+    if [[ "$zeronet_source" == *.zip ]]; then
+        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip $zeronet_source"; exit 1; }
+    elif [[ "$zeronet_source" == *.tar.gz ]]; then
+        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract $zeronet_source"; exit 1; }
     fi
-
-    mkdir -p "$ZERONET_DIR"
-
-    WORK_DIR="$(mktemp -d "$HOME/tmp.XXXXXX")"
-    cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
-
-    if [[ "$zeronet_source" == http*".git" ]]; then
-        git_clone_with_retries "$zeronet_source" "zeronet_repo"
-        base_dir="$WORK_DIR/zeronet_repo"
-    elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".tar.gz" ]]; then
-        download_with_retries "$zeronet_source" "zeronet_archive"
-        if [[ "$zeronet_source" == *.zip ]]; then
-            unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip $zeronet_source"; exit 1; }
-        elif [[ "$zeronet_source" == *.tar.gz ]]; then
-            tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract $zeronet_source"; exit 1; }
-        fi
-        rm zeronet_archive
-        zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
-        if [ -z "$zeronet_py_path" ]; then
-            log_error "zeronet.py not found after extraction."
-            exit 1
-        fi
-        base_dir=$(dirname "$zeronet_py_path")
-    elif [ -f "$zeronet_source" ]; then
-        cp "$zeronet_source" zeronet_archive
-        if [[ "$zeronet_source" == *.zip ]]; then
-            unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
-        elif [[ "$zeronet_source" == *.tar.gz ]]; then
-            tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
-        else
-            log_error "Unsupported file format. Please provide a .zip or .tar.gz file."
-            exit 1
-        fi
-        rm zeronet_archive
-        zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
-        if [ -z "$zeronet_py_path" ]; then
-            log_error "zeronet.py not found after extraction."
-            exit 1
-        fi
-        base_dir=$(dirname "$zeronet_py_path")
+    rm zeronet_archive
+    zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
+    if [ -z "$zeronet_py_path" ]; then
+        log_error "zeronet.py not found after extraction."
+        exit 1
+    fi
+    base_dir=$(dirname "$zeronet_py_path")
+elif [ -f "$zeronet_source" ]; then
+    cp "$zeronet_source" zeronet_archive
+    if [[ "$zeronet_source" == *.zip ]]; then
+        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
+    elif [[ "$zeronet_source" == *.tar.gz ]]; then
+        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
     else
-        log_error "Invalid input. Please provide a valid Git URL, ZIP URL, or file path."
+        log_error "Unsupported file format. Please provide a .zip or .tar.gz file."
         exit 1
     fi
-
-    log "Adjusting ownership of files before moving..."
-    chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
-
-    log "Moving extracted files to $ZERONET_DIR..."
-    mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
-
-    rm -rf "$WORK_DIR"
-
-    if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
-        log_error "zeronet.py not found in the expected directory."
+    rm zeronet_archive
+    zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
+    if [ -z "$zeronet_py_path" ]; then
+        log_error "zeronet.py not found after extraction."
         exit 1
     fi
+    base_dir=$(dirname "$zeronet_py_path")
+else
+    log_error "Invalid input. Please provide a valid Git URL, ZIP URL, or file path."
+    exit 1
+fi
 
-    cd "$ZERONET_DIR" || exit 1
+log "Adjusting ownership of files before moving..."
+chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
 
-    if [ ! -d "$ZERONET_DIR/venv" ]; then
-        python3 -m venv "$ZERONET_DIR/venv"
+log "Moving extracted files to $ZERONET_DIR..."
+mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
+
+rm -rf "$WORK_DIR"
+
+if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
+    log_error "zeronet.py not found in the expected directory."
+    exit 1
+fi
+
+cd "$ZERONET_DIR" || exit 1
+
+if [ ! -d "$ZERONET_DIR/venv" ]; then
+    python3 -m venv "$ZERONET_DIR/venv"
+fi
+
+source "$ZERONET_DIR/venv/bin/activate"
+
+chmod -R u+rwX "$ZERONET_DIR"
+
+if [ -f requirements.txt ]; then
+    chmod 644 requirements.txt
+    if ! pip install -r requirements.txt; then
+        log_error "Failed to install from requirements.txt"
+        exit 1
     fi
+fi
 
-    source "$ZERONET_DIR/venv/bin/activate"
+mkdir -p ./data
+chmod -R u+rwX ./data
 
-    chmod -R u+rwX "$ZERONET_DIR"
-
-    if [ -f requirements.txt ]; then
-        chmod 644 requirements.txt
-        if ! pip install -r requirements.txt; then
-            log_error "Failed to install from requirements.txt"
-            exit 1
-        fi
-    fi
-
-    mkdir -p ./data
-    chmod -R u+rwX ./data
-
-    if [[ "$users_json_source" == http* ]]; then
+if [[ "$users_json_source" == http* ]]; then
+    mkdir -p data
+    download_with_retries "$users_json_source" "data/users.json"
+elif [ -n "$users_json_source" ]; then
+    if [ -f "$users_json_source" ]; then
         mkdir -p data
-        download_with_retries "$users_json_source" "data/users.json"
-    elif [ -n "$users_json_source" ]; then
-        if [ -f "$users_json_source" ]; then
-            mkdir -p data
-            cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
-            log "users.json copied successfully from $users_json_source"
-        else
-            log_error "File not found: $users_json_source"
-            exit 1
-        fi
+        cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
+        log "users.json copied successfully from $users_json_source"
+    else
+        log_error "File not found: $users_json_source"
+        exit 1
     fi
-}
+fi
+
+mkdir -p ./data
+chmod -R u+rwX ./data
+
+mkdir -p $PREFIX/var/log/
 
 TRACKERS_FILE="$ZERONET_DIR/trackers.txt"
 
@@ -582,43 +597,21 @@ download_syncronite() {
 }
 
 provide_syncronite_instructions() {
-    zenity --info --title="Syncronite Instructions" --text="To add Syncronite to your ZeroNet:\n\n1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS\n\n2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link.\n\nNote: Only open links to ZeroNet sites that you trust." --width=400
+    log "To add Syncronite to your ZeroNet:"
+    log "1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS"
+    log "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
+    log "Note: Only open links to ZeroNet sites that you trust."
 }
 
-# Main installation process with progress bar
-(
-echo "0"; log "Updating package lists..."
-update_mirrors
-echo "10"; log "Installing required packages..."
-for package in "${required_packages[@]}"; do
-    if ! dpkg -s "$package" >/dev/null 2>&1; then
-        install_package "$package" || exit 1
-    fi
-done
-echo "30"; log "Installing Python packages..."
-install_python_packages
-echo "50"; log "Setting up ZeroNet..."
-setup_zeronet
-echo "60"; log "Configuring ZeroNet..."
+# Main installation process
+log "Starting ZeroNet installation..."
+update_trackers
 generate_random_port
 create_zeronet_conf
-echo "70"; log "Configuring Tor..."
 configure_tor
-echo "80"; log "Starting Tor..."
 start_tor
-echo "90"; log "Setting up autostart..."
 setup_autostart
-echo "95"; log "Downloading GeoIP database..."
 download_geoip_database
-echo "100"; log "Setup complete!"
-) |
-zenity --progress \
-  --title="ZeroNet Setup" \
-  --text="Setting up ZeroNet..." \
-  --percentage=0 \
-  --auto-close \
-  --auto-kill
-
 log "Starting ZeroNet..."
 start_zeronet
 
@@ -639,8 +632,9 @@ log "ZeroNet setup complete."
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
-    zenity --error --title="ZeroNet Error" --text="Failed to start ZeroNet" --width=300
+    termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
     exit 1
 fi
 
-zenity --info --title="ZeroNet Setup Complete" --text="ZeroNet is running successfully. Syncronite content is available." --width=300
+log "ZeroNet is running successfully. Syncronite content is available."
+provide_syncronite_instructions
