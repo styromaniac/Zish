@@ -15,10 +15,7 @@ log_error() {
 log "Setting up environment..."
 pkg update -y || log_error "Failed to update packages"
 pkg upgrade -y || log_error "Failed to upgrade packages"
-pkg install -y python python-pip openssh || log_error "Failed to install required packages"
-
-# Get the local IP address
-IP_ADDRESS=$(ip addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
+pkg install -y python python-pip || log_error "Failed to install required packages"
 
 log "Environment setup complete. Starting web installer..."
 
@@ -33,7 +30,6 @@ import json
 import os
 
 ZI_SH_URL = "https://raw.githubusercontent.com/styromaniac/Zish/refs/heads/main/zi.sh"
-IP_ADDRESS = "$IP_ADDRESS"  # Pass the IP_ADDRESS from bash to Python
 
 class InstallerHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -138,8 +134,9 @@ with open('installer.html', 'w') as f:
 PORT = 8000
 Handler = InstallerHandler
 
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    print(f"Server started at http://{IP_ADDRESS}:{PORT}")
+with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
+    print(f"Server started at http://127.0.0.1:{PORT}")
+    print("Use 'termux-open-url http://127.0.0.1:8000' to open in browser")
     print("Press Ctrl+C to stop the server")
     httpd.serve_forever()
 END
