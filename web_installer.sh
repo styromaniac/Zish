@@ -132,6 +132,8 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     fi
 fi
 
+# Your existing zi.sh content starts here
+
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
