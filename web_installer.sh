@@ -27,7 +27,7 @@ start_web_installer() {
     log "Setting up web installer..."
     pkg install -y python || log_error "Failed to install Python"
     # Start the Python server in the background
-    python - << END &
+    python - << END > /tmp/web_installer.log 2>&1 &
 import http.server
 import socketserver
 import urllib.parse
@@ -124,10 +124,16 @@ with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
     print(f"Server started at http://127.0.0.1:{PORT}")
     httpd.serve_forever()
 END
+
+    if ! pgrep -f "python.*http.server" > /dev/null; then
+        log_error "Failed to start web server. Check /tmp/web_installer.log for details."
+        exit 1
+    fi
+
     # Give the server a moment to start
     sleep 2
     # Open the URL in the default browser
-    termux-open-url http://127.0.0.1:8000
+    termux-open-url http://127.0.0.1:8000 || log "Please open http://127.0.0.1:8000 in your browser"
     # Wait for the user to stop the server
     echo "Press Ctrl+C to stop the server"
     wait
