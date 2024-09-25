@@ -33,6 +33,7 @@ import json
 import os
 
 ZI_SH_URL = "https://raw.githubusercontent.com/styromaniac/Zish/refs/heads/main/zi.sh"
+IP_ADDRESS = "$IP_ADDRESS"  # Pass the IP_ADDRESS from bash to Python
 
 class InstallerHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -138,7 +139,7 @@ PORT = 8000
 Handler = InstallerHandler
 
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    print(f"Server started at http://{os.environ['IP_ADDRESS']}:{PORT}")
+    print(f"Server started at http://{IP_ADDRESS}:{PORT}")
     print("Press Ctrl+C to stop the server")
     httpd.serve_forever()
 END
