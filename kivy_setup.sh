@@ -16,7 +16,6 @@ log "Setting up environment..."
 pkg update -y || log_error "Failed to update packages"
 pkg upgrade -y || log_error "Failed to upgrade packages"
 pkg install -y python python-pip build-essential || log_error "Failed to install required packages"
-pip install --upgrade pip || log_error "Failed to upgrade pip"
 pip install Cython || log_error "Failed to install Cython"
 CPPFLAGS="-I/data/data/com.termux/files/usr/include" LDFLAGS="-L/data/data/com.termux/files/usr/lib" pip install kivy || log_error "Failed to install Kivy"
 
