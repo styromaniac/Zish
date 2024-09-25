@@ -15,7 +15,10 @@ log_error() {
 log "Setting up environment..."
 pkg update -y || log_error "Failed to update packages"
 pkg upgrade -y || log_error "Failed to upgrade packages"
-pkg install -y python python-pip || log_error "Failed to install required packages"
+pkg install -y python python-pip curl || log_error "Failed to install required packages"
+
+log "Ensuring temporary directory exists..."
+mkdir -p "$PREFIX/tmp" || log_error "Failed to create temporary directory"
 
 log "Environment setup complete. Starting web installer..."
 
@@ -28,8 +31,13 @@ import subprocess
 import threading
 import json
 import os
+import tempfile
 
 ZI_SH_URL = "https://raw.githubusercontent.com/styromaniac/Zish/refs/heads/main/zi.sh"
+
+# Determine a writable temporary directory
+temp_dir = tempfile.gettempdir()
+install_progress_path = os.path.join(temp_dir, 'install_progress')
 
 class InstallerHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -44,7 +52,7 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             try:
-                with open('/tmp/install_progress', 'r') as f:
+                with open(install_progress_path, 'r') as f:
                     content = f.read().strip()
             except FileNotFoundError:
                 content = "Waiting to start installation..."
@@ -56,37 +64,46 @@ class InstallerHandler(http.server.SimpleHTTPRequestHandler):
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length).decode('utf-8')
         params = urllib.parse.parse_qs(post_data)
-        
+
         # Start installation in a separate thread
         threading.Thread(target=self.install_zeronet, args=(params,)).start()
-        
+
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b"Installation started")
 
     def install_zeronet(self, params):
-        with open('/tmp/install_progress', 'w') as f:
-            f.write("STATUS:Downloading zi.sh...")
-        
+        with open(install_progress_path, 'w') as f:
+            f.write("STATUS:Downloading zi.sh...\n")
+
         # Download zi.sh
-        subprocess.run(["curl", "-fsSL", ZI_SH_URL, "-o", "zi.sh"])
-        
+        result = subprocess.run(["curl", "-fsSL", ZI_SH_URL, "-o", "zi.sh"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+        if result.returncode != 0:
+            with open(install_progress_path, 'w') as f:
+                f.write(f"STATUS:Failed to download zi.sh. Error: {result.stderr}\n")
+            return
+
         inputs = f"{params['zeronet_source'][0]}\\n{params['users_json'][0]}\\n{params['onion_tracker'][0]}\\n{params['boot_setup'][0]}\\n"
         command = f"bash -c 'source ./zi.sh && main' <<< '{inputs}'"
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        
+
         for line in process.stdout:
-            with open('/tmp/install_progress', 'w') as f:
+            with open(install_progress_path, 'w') as f:
                 f.write(line)
         
+        for line in process.stderr:
+            with open(install_progress_path, 'a') as f:  # Append stderr
+                f.write(f"ERROR: {line}")
+
         process.wait()
         if process.returncode == 0:
-            with open('/tmp/install_progress', 'w') as f:
+            with open(install_progress_path, 'w') as f:
                 f.write("STATUS:Installation complete!")
         else:
-            with open('/tmp/install_progress', 'w') as f:
-                f.write("STATUS:Installation failed. Check logs for details.")
+            with open(install_progress_path, 'w') as f:
+                f.write(f"STATUS:Installation failed with return code {process.returncode}. Check logs for details.")
 
 # Create HTML file
 with open('installer.html', 'w') as f:
@@ -94,6 +111,7 @@ with open('installer.html', 'w') as f:
     <!DOCTYPE html>
     <html>
     <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>ZeroNet Installer</title>
         <style>
             body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
