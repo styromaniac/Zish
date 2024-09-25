@@ -473,16 +473,16 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
-ZERONET_DIR="$ZERONET_DIR"
-TORRC_FILE="$TORRC_FILE"
-UI_IP="$UI_IP"
-UI_PORT="$UI_PORT"
+ZERONET_DIR="${ZERONET_DIR}"
+TORRC_FILE="${TORRC_FILE}"
+UI_IP="${UI_IP}"
+UI_PORT="${UI_PORT}"
 
 export PATH=\$PATH:\$PREFIX/bin
 export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
 
 start_tor() {
-    tor -f "\$TORRC_FILE" &
+    tor -f "\${TORRC_FILE}" &
     # Wait until Tor is ready
     for i in {1..30}; do
         if [ -f "\$HOME/.tor/ZeroNet/hostname" ]; then
@@ -493,9 +493,9 @@ start_tor() {
 }
 
 start_zeronet() {
-    cd "\$ZERONET_DIR"
+    cd "\${ZERONET_DIR}"
     . ./venv/bin/activate
-    python3 zeronet.py --config_file "\$ZERONET_DIR/zeronet.conf" &
+    python3 zeronet.py --config_file "\${ZERONET_DIR}/zeronet.conf" &
 
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
@@ -506,7 +506,7 @@ start_tor
 start_zeronet
 EOL
 
-        chmod +x "$BOOT_SCRIPT"
+chmod +x "$BOOT_SCRIPT"
         log "Termux Boot script created at $BOOT_SCRIPT"
     else
         log "Termux:Boot directory not found. Boot script creation skipped."
