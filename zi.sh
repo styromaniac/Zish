@@ -68,7 +68,7 @@ update_mirrors || exit 1
 yes | pkg upgrade
 
 required_packages=(
-    termux-tools termux-keyring python
+    termux-api termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl jq rust openssl-tool net-tools
