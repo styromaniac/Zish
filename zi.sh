@@ -6,10 +6,6 @@ termux-change-repo
 
 termux-setup-storage
 
-# Install necessary packages
-pkg update
-pkg install -y termux-api jq
-
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
@@ -22,42 +18,25 @@ USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
-    termux-notification --content "$1"
 }
 
 log_error() {
     log "[ERROR] $1"
-    termux-notification --content "[ERROR] $1" --vibrate 1000
     exit 1
 }
 
-prompt_user() {
-    local prompt_title="$1"
-    local prompt_content="$2"
-    local input_type="${3:-text}"
-    local result
-
-    case $input_type in
-        "text")
-            result=$(termux-dialog text --title "$prompt_title" --input-hint "$prompt_content" | jq -r '.text')
-            ;;
-        "confirm")
-            result=$(termux-dialog confirm --title "$prompt_title" --content "$prompt_content" | jq -r '.text')
-            ;;
-        *)
-            log_error "Unknown input type: $input_type"
-            exit 1
-            ;;
-    esac
-
-    echo "$result"
-}
-
 # User prompts
-zeronet_source=$(prompt_user "ZeroNet Source" "Provide Git URL or file path for ZeroNet source" "text")
-users_json_source=$(prompt_user "users.json Source" "Provide URL or path to users.json (optional)" "text")
-onion_tracker_setup=$(prompt_user "Onion Tracker" "Set up onion tracker? (y/n)" "confirm")
-boot_setup=$(prompt_user "Auto-start Setup" "Set up auto-start with Termux:Boot? (y/n)" "confirm")
+log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
+read -r zeronet_source
+
+log "Please provide URL, path to users.json, or press Enter to skip:"
+read -r users_json_source
+
+log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
+read -r onion_tracker_setup
+
+log "Do you want to set up auto-start with Termux:Boot? (y/n)"
+read -r boot_setup
 
 update_mirrors() {
     local max_attempts=5
@@ -498,7 +477,7 @@ export PATH=\$PATH:\$PREFIX/bin
 export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
 
 start_tor() {
-    tor -f "$TORRC_FILE" &
+    tor -f "\${TORRC_FILE}" &
     # Wait until Tor is ready
     for i in {1..30}; do
         if [ -f "\$HOME/.tor/ZeroNet/hostname" ]; then
@@ -509,7 +488,7 @@ start_tor() {
 }
 
 start_zeronet() {
-    cd "$ZERONET_DIR"
+    cd "\${ZERONET_DIR}"
     . ./venv/bin/activate
     python3 zeronet.py &
 
@@ -522,7 +501,7 @@ start_tor
 start_zeronet
 EOL
 
-        chmod +x "$BOOT_SCRIPT"
+chmod +x "$BOOT_SCRIPT"
         log "Termux Boot script created at $BOOT_SCRIPT"
     else
         log "Termux:Boot directory not found. Boot script creation skipped."
@@ -668,6 +647,3 @@ fi
 
 log "ZeroNet is running successfully. Syncronite content is available."
 provide_syncronite_instructions
-
-# Final notification
-termux-notification --title "ZeroNet Installation Complete" --content "ZeroNet is now running. Syncronite content is available."
