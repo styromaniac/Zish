@@ -16,6 +16,9 @@ UI_PORT=43110
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
+# Install termux-api before using notifications
+pkg install -y termux-api
+
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
     termux-notification --content "$1"
@@ -68,7 +71,7 @@ update_mirrors || exit 1
 yes | pkg upgrade
 
 required_packages=(
-    termux-api termux-tools termux-keyring python
+    termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl jq rust openssl-tool net-tools
