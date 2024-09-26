@@ -455,7 +455,6 @@ TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
-    # Check if Termux:Boot directory exists, create if it doesn't
     if [ ! -d "$TERMUX_BOOT_DIR" ]; then
         log "Termux:Boot directory not found. Creating it..."
         mkdir -p "$TERMUX_BOOT_DIR"
@@ -467,23 +466,16 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
         fi
     fi
 
-    # Only create the boot script if the directory exists
     if [ -d "$TERMUX_BOOT_DIR" ]; then
         cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
-
-ZERONET_DIR="${ZERONET_DIR}"
-TORRC_FILE="${TORRC_FILE}"
-UI_IP="${UI_IP}"
-UI_PORT="${UI_PORT}"
 
 export PATH=\$PATH:\$PREFIX/bin
 export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
 
 start_tor() {
     tor -f "\${TORRC_FILE}" &
-    # Wait until Tor is ready
     for i in {1..30}; do
         if [ -f "\$HOME/.tor/ZeroNet/hostname" ]; then
             break
