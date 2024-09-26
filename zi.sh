@@ -18,25 +18,29 @@ USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    termux-notification --content "$1"
 }
 
 log_error() {
     log "[ERROR] $1"
+    termux-notification --content "[ERROR] $1" --vibrate 1000
     exit 1
 }
 
+# User prompts using Termux notifications
+prompt_user() {
+    local prompt_text="$1"
+    local id="$2"
+    termux-notification --id "$id" --content "$prompt_text" --action "termux-notification-remove $id"
+    read -r response
+    echo "$response"
+}
+
 # User prompts
-log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
-read -r zeronet_source
-
-log "Please provide URL, path to users.json, or press Enter to skip:"
-read -r users_json_source
-
-log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
-read -r onion_tracker_setup
-
-log "Do you want to set up auto-start with Termux:Boot? (y/n)"
-read -r boot_setup
+zeronet_source=$(prompt_user "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):" "zeronet_source")
+users_json_source=$(prompt_user "Please provide URL, path to users.json, or press Enter to skip:" "users_json")
+onion_tracker_setup=$(prompt_user "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)" "onion_tracker")
+boot_setup=$(prompt_user "Do you want to set up auto-start with Termux:Boot? (y/n)" "boot_setup")
 
 update_mirrors() {
     local max_attempts=5
@@ -647,3 +651,6 @@ fi
 
 log "ZeroNet is running successfully. Syncronite content is available."
 provide_syncronite_instructions
+
+# Final notification
+termux-notification --title "ZeroNet Installation Complete" --content "ZeroNet is now running. Syncronite content is available."
