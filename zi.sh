@@ -495,7 +495,7 @@ start_tor() {
 start_zeronet() {
     cd "\${ZERONET_DIR}"
     . ./venv/bin/activate
-    python3 zeronet.py --config_file "\${ZERONET_DIR}/zeronet.conf" &
+    python3 zeronet.py &
 
     ZERONET_PID=\$!
     echo "ZeroNet started with PID \$ZERONET_PID"
@@ -560,7 +560,7 @@ start_zeronet() {
     sleep 2
 
     # Start ZeroNet with the updated PATH
-    python3 zeronet.py --config_file $ZERONET_DIR/zeronet.conf &
+    python3 zeronet.py &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
