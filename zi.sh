@@ -32,16 +32,17 @@ log_error() {
 }
 
 prompt_user() {
-    local prompt_text="$1"
-    local input_type="${2:-text}"
+    local prompt_title="$1"
+    local prompt_content="$2"
+    local input_type="${3:-text}"
     local result
 
     case $input_type in
         "text")
-            result=$(termux-dialog text -t "$prompt_text" | jq -r '.text')
+            result=$(termux-dialog text --title "$prompt_title" --input-hint "$prompt_content" | jq -r '.text')
             ;;
         "confirm")
-            result=$(termux-dialog confirm -t "$prompt_text" | jq -r '.text')
+            result=$(termux-dialog confirm --title "$prompt_title" --content "$prompt_content" | jq -r '.text')
             ;;
         *)
             log_error "Unknown input type: $input_type"
@@ -53,10 +54,10 @@ prompt_user() {
 }
 
 # User prompts
-zeronet_source=$(prompt_user "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):")
-users_json_source=$(prompt_user "Please provide URL, path to users.json, or press Enter to skip:")
-onion_tracker_setup=$(prompt_user "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)" "confirm")
-boot_setup=$(prompt_user "Do you want to set up auto-start with Termux:Boot? (y/n)" "confirm")
+zeronet_source=$(prompt_user "ZeroNet Source" "Provide Git URL or file path for ZeroNet source" "text")
+users_json_source=$(prompt_user "users.json Source" "Provide URL or path to users.json (optional)" "text")
+onion_tracker_setup=$(prompt_user "Onion Tracker" "Set up onion tracker? (y/n)" "confirm")
+boot_setup=$(prompt_user "Auto-start Setup" "Set up auto-start with Termux:Boot? (y/n)" "confirm")
 
 update_mirrors() {
     local max_attempts=5
@@ -497,7 +498,7 @@ export PATH=\$PATH:\$PREFIX/bin
 export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
 
 start_tor() {
-    tor -f "\${TORRC_FILE}" &
+    tor -f "$TORRC_FILE" &
     # Wait until Tor is ready
     for i in {1..30}; do
         if [ -f "\$HOME/.tor/ZeroNet/hostname" ]; then
@@ -508,7 +509,7 @@ start_tor() {
 }
 
 start_zeronet() {
-    cd "\${ZERONET_DIR}"
+    cd "$ZERONET_DIR"
     . ./venv/bin/activate
     python3 zeronet.py &
 
@@ -521,7 +522,7 @@ start_tor
 start_zeronet
 EOL
 
-chmod +x "$BOOT_SCRIPT"
+        chmod +x "$BOOT_SCRIPT"
         log "Termux Boot script created at $BOOT_SCRIPT"
     else
         log "Termux:Boot directory not found. Boot script creation skipped."
