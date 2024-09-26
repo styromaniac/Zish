@@ -6,6 +6,10 @@ termux-change-repo
 
 termux-setup-storage
 
+# Install necessary packages
+pkg update
+pkg install -y termux-api jq
+
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
@@ -15,9 +19,6 @@ UI_IP="127.0.0.1"
 UI_PORT=43110
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-
-# Install termux-api before using notifications
-pkg install -y termux-api
 
 log() {
     echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -30,20 +31,32 @@ log_error() {
     exit 1
 }
 
-# User prompts using Termux notifications
 prompt_user() {
     local prompt_text="$1"
-    local id="$2"
-    termux-notification --id "$id" --content "$prompt_text" --action "termux-notification-remove $id"
-    read -r response
-    echo "$response"
+    local input_type="${2:-text}"
+    local result
+
+    case $input_type in
+        "text")
+            result=$(termux-dialog text -t "$prompt_text" | jq -r '.text')
+            ;;
+        "confirm")
+            result=$(termux-dialog confirm -t "$prompt_text" | jq -r '.text')
+            ;;
+        *)
+            log_error "Unknown input type: $input_type"
+            exit 1
+            ;;
+    esac
+
+    echo "$result"
 }
 
 # User prompts
-zeronet_source=$(prompt_user "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):" "zeronet_source")
-users_json_source=$(prompt_user "Please provide URL, path to users.json, or press Enter to skip:" "users_json")
-onion_tracker_setup=$(prompt_user "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)" "onion_tracker")
-boot_setup=$(prompt_user "Do you want to set up auto-start with Termux:Boot? (y/n)" "boot_setup")
+zeronet_source=$(prompt_user "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):")
+users_json_source=$(prompt_user "Please provide URL, path to users.json, or press Enter to skip:")
+onion_tracker_setup=$(prompt_user "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)" "confirm")
+boot_setup=$(prompt_user "Do you want to set up auto-start with Termux:Boot? (y/n)" "confirm")
 
 update_mirrors() {
     local max_attempts=5
