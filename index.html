@@ -22,7 +22,7 @@
         h1 {
             color: #333;
         }
-        #start-button {
+        #start-button, #submit-button {
             background-color: #4CAF50;
             border: none;
             color: white;
@@ -54,28 +54,77 @@
             margin-top: 20px;
             font-weight: bold;
         }
+        #prompt-container {
+            margin-top: 20px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 20px;
+            margin: 8px 0;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>ZeroNet Installer</h1>
-        <button id="start-button" onclick="startInstallation()">Start Installation</button>
-        <div id="progress-bar">
+        <div id="prompt-container">
+            <p id="current-prompt"></p>
+            <input type="text" id="user-input">
+            <button id="submit-button" onclick="submitResponse()">Submit</button>
+        </div>
+        <button id="start-button" onclick="startInstallation()" style="display: none;">Start Installation</button>
+        <div id="progress-bar" style="display: none;">
             <div id="progress-bar-fill">0%</div>
         </div>
         <div id="status">Ready to start installation</div>
     </div>
 
     <script>
+        let currentPromptIndex = 0;
+        const responses = {};
+
         function startInstallation() {
-            document.getElementById('start-button').disabled = true;
-            fetch('/start_installation', {method: 'POST'})
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'started') {
-                        updateProgress();
-                    }
-                });
+            document.getElementById('start-button').style.display = 'none';
+            document.getElementById('progress-bar').style.display = 'block';
+            fetch('/start_installation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(responses)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'started') {
+                    updateProgress();
+                }
+            });
+        }
+
+        function submitResponse() {
+            const input = document.getElementById('user-input');
+            responses[currentPromptIndex] = input.value;
+            input.value = '';
+
+            fetch('/start_installation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(responses)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'next_prompt') {
+                    document.getElementById('current-prompt').textContent = data.prompt;
+                    currentPromptIndex++;
+                } else if (data.status === 'started') {
+                    document.getElementById('prompt-container').style.display = 'none';
+                    document.getElementById('progress-bar').style.display = 'block';
+                    updateProgress();
+                }
+            });
         }
 
         function updateProgress() {
@@ -87,11 +136,18 @@
                     document.getElementById('status').textContent = data.status;
                     if (!data.complete) {
                         setTimeout(updateProgress, 1000);
-                    } else {
-                        document.getElementById('start-button').disabled = false;
                     }
                 });
         }
+
+        // Initialize the first prompt
+        fetch('/start_installation', { method: 'POST', body: JSON.stringify({}) })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'next_prompt') {
+                    document.getElementById('current-prompt').textContent = data.prompt;
+                }
+            });
     </script>
 </body>
 </html>
