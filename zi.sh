@@ -473,14 +473,14 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
-export PATH=\$PATH:\$PREFIX/bin
-export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$PREFIX/lib
+export PATH=$PATH:/data/data/com.termux/files/usr/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
-    tor -f "\${TORRC_FILE}" &
+    tor -f "/data/data/com.termux/files/home/.tor/torrc" &
     # Wait until Tor is ready
     for i in {1..30}; do
-        if [ -f "\$HOME/.tor/ZeroNet/hostname" ]; then
+        if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
             break
         fi
         sleep 1
@@ -488,13 +488,13 @@ start_tor() {
 }
 
 start_zeronet() {
-    cd "\${ZERONET_DIR}"
+    cd "/data/data/com.termux/files/home/apps/zeronet"
     . ./venv/bin/activate
     python3 zeronet.py &
 
-    ZERONET_PID=\$!
-    echo "ZeroNet started with PID \$ZERONET_PID"
-    termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID \$ZERONET_PID" --ongoing
+    ZERONET_PID=$!
+    echo "ZeroNet started with PID $ZERONET_PID"
+    termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
 }
 
 start_tor
