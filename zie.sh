@@ -377,7 +377,6 @@ ui_port = $UI_PORT
 tor_controller = $UI_IP:$TOR_CONTROL_PORT
 tor_proxy = $UI_IP:$TOR_PROXY_PORT
 trackers_file = $TRACKERS_FILE
- {data_dir}/$SYNCRONITE_ADDRESS/cache/1/Syncronite.html
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
@@ -457,24 +456,22 @@ create_monitoring_script() {
     cat > "$script_path" << EOL
 import requests
 from bs4 import BeautifulSoup
-import json
 import os
 import time
-from datetime import datetime
-import urllib.parse
+import json
 
-LAST_CHECK_FILE = os.path.expanduser("~/last_check.txt")
 ZERONET_URL = "http://127.0.0.1:43110"
+LAST_CHECK_FILE = os.path.expanduser("~/last_check.json")
 
-def get_last_check_time():
+def get_last_check_data():
     if os.path.exists(LAST_CHECK_FILE):
         with open(LAST_CHECK_FILE, 'r') as f:
-            return float(f.read().strip())
-    return 0
+            return json.load(f)
+    return {"last_check": 0, "seen_titles": []}
 
-def save_last_check_time(timestamp):
+def save_last_check_data(data):
     with open(LAST_CHECK_FILE, 'w') as f:
-        f.write(str(timestamp))
+        json.dump(data, f)
 
 def fetch_zeronet_feed():
     try:
@@ -489,41 +486,41 @@ def parse_feed(html_content):
     news_items = soup.find_all('div', class_='news_item')
     updates = []
     for item in news_items:
-        title = item.find('div', class_='title').text.strip()
-        body = item.find('div', class_='body').text.strip()
-        timestamp = float(item.get('data-added', 0))
-        link = item.find('a', class_='title')['href'] if item.find('a', class_='title') else ''
-        full_link = f"{ZERONET_URL}{link}" if link else ''
+        title = item.find('h2').text.strip()
+        body = item.find('p').text.strip()
+        date = item.find('span', class_='news_date').text.strip() if item.find('span', class_='news_date') else "No date"
         updates.append({
             'title': title,
             'body': body,
-            'timestamp': timestamp,
-            'link': full_link
+            'date': date
         })
     return updates
 
-def send_notification(title, body, link):
-    encoded_link = urllib.parse.quote(link)
-    os.system(f'termux-notification --title "{title}" --content "{body}" --action "termux-open-url {encoded_link}"')
+def send_notification(title, body):
+    os.system(f'termux-notification --title "{title}" --content "{body}"')
 
 def check_for_updates():
-    last_check = get_last_check_time()
+    last_check_data = get_last_check_data()
     current_time = time.time()
 
     html_content = fetch_zeronet_feed()
     if html_content:
         updates = parse_feed(html_content)
-        new_updates = [u for u in updates if u['timestamp'] > last_check]
+        new_updates = [u for u in updates if u['title'] not in last_check_data["seen_titles"]]
 
         for update in new_updates:
-            send_notification(update['title'], update['body'], update['link'])
+            send_notification(update['title'], update['body'])
+            last_check_data["seen_titles"].append(update['title'])
 
         if new_updates:
             print(f"Sent {len(new_updates)} new notifications.")
         else:
             print("No new updates.")
 
-    save_last_check_time(current_time)
+        # Keep only the last 100 seen titles to prevent the file from growing too large
+        last_check_data["seen_titles"] = last_check_data["seen_titles"][-100:]
+        last_check_data["last_check"] = current_time
+        save_last_check_data(last_check_data)
 
 if __name__ == "__main__":
     check_for_updates()
@@ -535,7 +532,7 @@ EOL
 setup_monitoring_cronjob() {
     local cron_schedule="*/5 * * * *"
     local script_path="$HOME/zeronet_monitor.py"
-    (crontab -l 2>/dev/null; echo "$cron_schedule python $script_path") | crontab -
+    (crontab -l 2>/dev/null; echo "$cron_schedule /data/data/com.termux/files/usr/bin/python $script_path") | crontab -
     log "Set up cronjob to run ZeroNet monitoring script every 5 minutes"
 }
 
@@ -589,11 +586,14 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
+ZERONET_DIR="/data/data/com.termux/files/home/apps/zeronet"
+TORRC_FILE="/data/data/com.termux/files/home/.tor/torrc"
+
 export PATH=$PATH:/data/data/com.termux/files/usr/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
-    tor -f "/data/data/com.termux/files/home/.tor/torrc" &
+    tor -f "$TORRC_FILE" &
     # Wait until Tor is ready
     for i in {1..30}; do
         if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
@@ -604,7 +604,7 @@ start_tor() {
 }
 
 start_zeronet() {
-    cd "/data/data/com.termux/files/home/apps/zeronet"
+    cd "$ZERONET_DIR"
     . ./venv/bin/activate
     python3 zeronet.py &
 
