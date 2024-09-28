@@ -51,17 +51,17 @@ echo "ZeroNet installation: Step 3 of 4 - Gathering information"
 echo "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
 read -r zeronet_source
 
-echo "Please provide URL, path to users.json, or press Enter to skip:"
+echo "Please provide a URL or path to users.json, or press Enter to skip. users.json is where your ZeroNet accounts are stored and/or will be stored."
 read -r users_json_source
 
-echo "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
+echo "Do you want to set up an onion tracker? This will strengthen ZeroNet. This doesn't work for every Android device. (y/n)"
 read -r onion_tracker_setup
 
-echo "Do you want to set up auto-start with Termux:Boot? (y/n)"
+echo "Do you want to set up auto-start with Termux:Boot? This will start ZeroNet after your device is rebooted. (y/n)"
 read -r boot_setup
 
 echo "ZeroNet installation: Step 4 of 4 - Installing ZeroNet"
-echo "This may take several minutes. Please be patient."
+echo "This may take several minutes. Please be patient. If you have Termux:API installed, you'll receive notifications with further instructions when ZeroNet is installed and running."
 
 total_steps=10
 current_step=0
@@ -396,6 +396,7 @@ create_zeronet_conf() {
 
     cat > "$conf_file" << EOL
 [global]
+homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
 data_dir = $ZERONET_DIR/data
 log_dir = $PREFIX/var/log/zeronet
 ui_ip = $UI_IP
@@ -520,8 +521,8 @@ start_zeronet() {
     python3 zeronet.py &>/dev/null &
 
     ZERONET_PID=$!
-    echo "ZeroNet started with PID $ZERONET_PID"
-    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+    echo "ZeroNet started"
+    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started" --ongoing
     termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://$UI_IP:$UI_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'"
 }
 
@@ -653,9 +654,8 @@ download_syncronite() {
 
 provide_syncronite_instructions() {
     local instructions="To add Syncronite to ZeroNet:
-1. Open ZeroNet at http://$UI_IP:$UI_PORT
-2. Visit http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS
-3. ZeroNet will add Syncronite to your dashboard
+1. Visit http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS
+2. ZeroNet will add Syncronite to your dashboard so you'll receive trackers list updates as they come.
 Note: Only open links to ZeroNet sites that you trust."
     
     log "To add Syncronite to your ZeroNet:"
