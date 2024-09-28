@@ -2,6 +2,10 @@
 
 termux-wake-lock
 
+termux-change-repo
+
+termux-setup-storage
+
 # Initialize progress
 TOTAL_STEPS=10
 CURRENT_STEP=0
