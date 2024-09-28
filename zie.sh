@@ -2,9 +2,8 @@
 
 termux-wake-lock
 
-termux-change-repo
-
-termux-setup-storage
+HEIGHT=10
+WIDTH=60
 
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
@@ -17,79 +16,110 @@ SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 log_error() {
     log "[ERROR] $1"
+    whiptail --title "Error" --msgbox "$1" $HEIGHT $WIDTH
     exit 1
 }
 
 # User prompts
-log "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
-read -r zeronet_source
+zeronet_source=$(whiptail --inputbox "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):" $HEIGHT $WIDTH 3>&1 1>&2 2>&3)
 
-log "Please provide URL, path to users.json, or press Enter to skip:"
-read -r users_json_source
+users_json_source=$(whiptail --inputbox "Please provide URL, path to users.json, or leave blank to skip:" $HEIGHT $WIDTH 3>&1 1>&2 2>&3)
 
-log "Do you want to set up an onion tracker? This will strengthen ZeroNet. (y/n)"
-read -r onion_tracker_setup
+if (whiptail --title "Onion Tracker Setup" --yesno "Do you want to set up an onion tracker? This will strengthen ZeroNet." $HEIGHT $WIDTH); then
+    onion_tracker_setup="y"
+else
+    onion_tracker_setup="n"
+fi
 
-log "Do you want to set up auto-start with Termux:Boot? (y/n)"
-read -r boot_setup
+if (whiptail --title "Auto-Start Setup" --yesno "Do you want to set up auto-start with Termux:Boot?" $HEIGHT $WIDTH); then
+    boot_setup="y"
+else
+    boot_setup="n"
+fi
 
 update_mirrors() {
     local max_attempts=5
     local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if yes | pkg update; then
-            log "Successfully updated package lists"
-            return 0
-        else
-            log "Failed to update package lists. Attempt $attempt of $max_attempts."
-            if [ $attempt -lt $max_attempts ]; then
-                log "Trying a different mirror..."
-                termux-change-repo
-                sleep 5
+    (
+        while [ $attempt -le $max_attempts ]; do
+            PCT=$(( (attempt - 1) * 20 ))
+            echo $PCT
+            echo "XXX"
+            echo "Updating package lists... (Attempt $attempt of $max_attempts)"
+            echo "XXX"
+            if yes | pkg update >/dev/null 2>&1; then
+                echo "100"
+                echo "XXX"
+                echo "Package lists updated successfully."
+                echo "XXX"
+                break
+            else
+                log "Failed to update package lists. Attempt $attempt of $max_attempts."
+                if [ $attempt -lt $max_attempts ]; then
+                    log "Trying a different mirror..."
+                    termux-change-repo
+                    sleep 5
+                fi
+                ((attempt++))
             fi
-            ((attempt++))
-        fi
-    done
-    log_error "Failed to update package lists after $max_attempts attempts."
-    return 1
+        done
+    ) | whiptail --gauge "Updating package lists..." $HEIGHT $WIDTH 0
+
+    if [ $attempt -gt $max_attempts ]; then
+        log_error "Failed to update package lists after $max_attempts attempts."
+        return 1
+    fi
+    return 0
 }
 
 update_mirrors || exit 1
 
-yes | pkg upgrade
+yes | pkg upgrade >/dev/null 2>&1
 
 required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl jq rust openssl-tool net-tools
-    cronie
 )
 
 install_package() {
     local package=$1
     local max_attempts=3
     local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if yes | pkg install -y "$package"; then
-            log "Successfully installed $package"
-            return 0
-        else
-            log "Failed to install $package. Attempt $attempt of $max_attempts."
-            if [ $attempt -lt $max_attempts ]; then
-                log "Retrying in 5 seconds..."
-                sleep 5
+    (
+        while [ $attempt -le $max_attempts ]; do
+            PCT=$(( (attempt - 1) * 33 ))
+            echo $PCT
+            echo "XXX"
+            echo "Installing package $package (Attempt $attempt of $max_attempts)..."
+            echo "XXX"
+            if yes | pkg install -y "$package" >/dev/null 2>&1; then
+                echo "100"
+                echo "XXX"
+                echo "Successfully installed $package"
+                echo "XXX"
+                break
+            else
+                log "Failed to install $package. Attempt $attempt of $max_attempts."
+                if [ $attempt -lt $max_attempts ]; then
+                    sleep 5
+                fi
+                ((attempt++))
             fi
-            ((attempt++))
-        fi
-    done
-    log_error "Failed to install $package after $max_attempts attempts."
-    return 1
+        done
+    ) | whiptail --gauge "Installing $package..." $HEIGHT $WIDTH 0
+
+    if [ $attempt -gt $max_attempts ]; then
+        log_error "Failed to install $package after $max_attempts attempts."
+        return 1
+    fi
+    return 0
 }
 
 for package in "${required_packages[@]}"; do
@@ -99,7 +129,7 @@ for package in "${required_packages[@]}"; do
 done
 
 log "Installing OpenSSL from Termux repository..."
-yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
+yes | pkg install -y openssl-tool >/dev/null 2>&1 || log_error "Failed to install OpenSSL from repository"
 
 log "OpenSSL installation completed."
 
@@ -108,7 +138,7 @@ install_python_packages() {
     export CFLAGS="-I$PREFIX/include"
     export LDFLAGS="-L$PREFIX/lib"
 
-    pip install --upgrade pip setuptools wheel
+    pip install --upgrade pip setuptools wheel >/dev/null 2>&1
 
     MAX_RETRIES=3
     RETRY_DELAY=10
@@ -117,18 +147,15 @@ install_python_packages() {
         local package=$1
         local retries=0
         while [ $retries -lt $MAX_RETRIES ]; do
-            if pip install --no-deps $package; then
+            if pip install --no-deps $package >/dev/null 2>&1; then
                 log "Successfully installed $package"
                 return 0
             else
                 retries=$((retries + 1))
                 log "Failed to install $package. Attempt $retries of $MAX_RETRIES."
                 if [ $retries -lt $MAX_RETRIES ]; then
-                    log "Retrying in $RETRY_DELAY seconds..."
                     sleep $RETRY_DELAY
-                    # Kill any hanging processes
                     pkill -f "pip install"
-                    # Clean up temporary directories
                     rm -rf /tmp/pip-*
                 fi
             fi
@@ -137,15 +164,14 @@ install_python_packages() {
         return 1
     }
 
-    # Try different installation methods
     install_package_with_fallbacks() {
         local package=$1
         if ! install_package_with_retry $package; then
             log "Attempting to install $package with binary distribution..."
-            if ! pip install --only-binary=:all: $package; then
+            if ! pip install --only-binary=:all: $package >/dev/null 2>&1; then
                 if [ "$package" = "cryptography" ]; then
                     log "Attempting to install cryptography without Rust..."
-                    if ! CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography; then
+                    if ! CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography >/dev/null 2>&1; then
                         log_error "All installation methods failed for $package"
                         return 1
                     fi
@@ -167,15 +193,15 @@ install_python_packages() {
     install_package_with_fallbacks six || return 1
     install_package_with_fallbacks idna || return 1
 
-    log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" >/dev/null 2>&1 || log_error "Failed to import one or more required Python packages"
 }
 
-install_python_packages || exit 1
+(
+    install_python_packages
+) | whiptail --gauge "Installing Python packages..." $HEIGHT $WIDTH 0
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
-    log "Proceeding to adjust permissions and clean the directory."
     chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
     rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
 fi
@@ -188,9 +214,11 @@ cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 download_with_retries() {
     local url=$1
     local output_file=$2
+    local retries=0
 
     while true; do
-        log "Attempting to download $url..."
+        retries=$((retries + 1))
+        whiptail --infobox "Attempting to download $url...\nAttempt $retries" $HEIGHT $WIDTH
         if curl -s -f -L "$url" -o "$output_file"; then
             log "Successfully downloaded $url"
             break
@@ -205,18 +233,27 @@ download_with_retries() {
 git_clone_with_retries() {
     local repo_url=$1
     local target_dir=$2
+    local max_attempts=3
+    local attempt=1
 
-    while true; do
-        log "Attempting to clone $repo_url..."
-        if git clone "$repo_url" "$target_dir"; then
+    while [ $attempt -le $max_attempts ]; do
+        whiptail --infobox "Cloning repository $repo_url...\nAttempt $attempt of $max_attempts" $HEIGHT $WIDTH
+        if git clone "$repo_url" "$target_dir" >/dev/null 2>&1; then
             log "Successfully cloned $repo_url"
             break
         else
-            log "Failed to clone $repo_url. Retrying in 5 seconds..."
+            log "Failed to clone $repo_url. Attempt $attempt of $max_attempts."
             rm -rf "$target_dir"
             sleep 5
+            ((attempt++))
         fi
     done
+
+    if [ $attempt -gt $max_attempts ]; then
+        log_error "Failed to clone $repo_url after $max_attempts attempts."
+        return 1
+    fi
+    return 0
 }
 
 if [[ "$zeronet_source" == http*".git" ]]; then
@@ -225,9 +262,9 @@ if [[ "$zeronet_source" == http*".git" ]]; then
 elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".tar.gz" ]]; then
     download_with_retries "$zeronet_source" "zeronet_archive"
     if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip $zeronet_source"; exit 1; }
+        unzip -o zeronet_archive -d "$WORK_DIR" >/dev/null 2>&1 || { log_error "Failed to unzip $zeronet_source"; exit 1; }
     elif [[ "$zeronet_source" == *.tar.gz ]]; then
-        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract $zeronet_source"; exit 1; }
+        tar -xzf zeronet_archive -C "$WORK_DIR" >/dev/null 2>&1 || { log_error "Failed to extract $zeronet_source"; exit 1; }
     fi
     rm zeronet_archive
     zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
@@ -239,9 +276,9 @@ elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".ta
 elif [ -f "$zeronet_source" ]; then
     cp "$zeronet_source" zeronet_archive
     if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
+        unzip -o zeronet_archive -d "$WORK_DIR" >/dev/null 2>&1 || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
     elif [[ "$zeronet_source" == *.tar.gz ]]; then
-        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
+        tar -xzf zeronet_archive -C "$WORK_DIR" >/dev/null 2>&1 || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
     else
         log_error "Unsupported file format. Please provide a .zip or .tar.gz file."
         exit 1
@@ -258,7 +295,6 @@ else
     exit 1
 fi
 
-log "Adjusting ownership of files before moving..."
 chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
 
 log "Moving extracted files to $ZERONET_DIR..."
@@ -283,7 +319,7 @@ chmod -R u+rwX "$ZERONET_DIR"
 
 if [ -f requirements.txt ]; then
     chmod 644 requirements.txt
-    if ! pip install -r requirements.txt; then
+    if ! pip install -r requirements.txt >/dev/null 2>&1; then
         log_error "Failed to install from requirements.txt"
         exit 1
     fi
@@ -314,7 +350,6 @@ mkdir -p $PREFIX/var/log/
 TRACKERS_FILE="$ZERONET_DIR/trackers.txt"
 
 update_trackers() {
-    log "Updating trackers list..."
     trackers_urls=(
         "https://cf.trackerslist.com/best.txt"
         "https://bitbucket.org/xiu2/trackerslistcollection/raw/master/best.txt"
@@ -326,7 +361,7 @@ update_trackers() {
     )
 
     for tracker_url in "${trackers_urls[@]}"; do
-        log "Attempting to download tracker list from $tracker_url..."
+        whiptail --infobox "Attempting to download tracker list from $tracker_url..." $HEIGHT $WIDTH
         if curl -A "$USER_AGENT" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
             log "Successfully downloaded tracker list from $tracker_url"
             chmod 644 "$TRACKERS_FILE"
@@ -335,7 +370,7 @@ update_trackers() {
             log "Failed to download from $tracker_url."
         fi
     done
-    log_error "Failed to download from any URL. Retrying in 5 seconds..."
+    log_error "Failed to download tracker list. Retrying in 5 seconds..."
     sleep 5
 }
 
@@ -346,21 +381,15 @@ generate_random_port() {
 
     while true; do
         RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
-        
-        # Check if the port is in the excluded list
+
         if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
-            log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
             continue
         fi
-        
-        # Check if the port is already in use
+
         if ! netstat -tuln | grep -q ":$RANDOM_PORT "; then
-            log "Selected available port $RANDOM_PORT for ZeroNet."
             FILESERVER_PORT=$RANDOM_PORT
             log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
             break
-        else
-            log "Port $RANDOM_PORT is in use. Generating a new port..."
         fi
     done
 }
@@ -390,7 +419,6 @@ configure_tor() {
     mkdir -p $HOME/.tor
     mkdir -p $PREFIX/var/log/tor
 
-    # Mandatory configuration
     cat > $TORRC_FILE << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
@@ -398,7 +426,6 @@ CookieAuthentication 1
 Log notice file $PREFIX/var/log/tor/notices.log
 EOL
 
-    # Optional onion service configuration
     if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
         mkdir -p $HOME/.tor/ZeroNet
         cat >> $TORRC_FILE << EOL
@@ -425,11 +452,10 @@ TOR_PID=$!
 
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
     log "Waiting for Tor to start and generate the hidden service..."
-    for i in {1..60}; do  # Increased wait time to 60 seconds
+    for i in {1..60}; do
         if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
             ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
             log "Onion address generated: $ONION_ADDRESS"
-            # Update ZeroNet configuration
             sed -i "s/^ip_external =.*/ip_external = $ONION_ADDRESS/" "$ZERONET_DIR/zeronet.conf"
             break
         fi
@@ -451,124 +477,10 @@ else
     exit 1
 fi
 
-create_monitoring_script() {
-    local script_path="$HOME/zeronet_monitor.py"
-    cat > "$script_path" << EOL
-import requests
-from bs4 import BeautifulSoup
-import os
-import time
-import json
-
-ZERONET_URL = "http://127.0.0.1:43110"
-LAST_CHECK_FILE = os.path.expanduser("~/last_check.json")
-
-def get_last_check_data():
-    if os.path.exists(LAST_CHECK_FILE):
-        with open(LAST_CHECK_FILE, 'r') as f:
-            return json.load(f)
-    return {"last_check": 0, "seen_titles": []}
-
-def save_last_check_data(data):
-    with open(LAST_CHECK_FILE, 'w') as f:
-        json.dump(data, f)
-
-def fetch_zeronet_feed():
-    try:
-        response = requests.get(ZERONET_URL)
-        return response.text
-    except requests.RequestException as e:
-        print(f"Error fetching ZeroNet feed: {e}")
-        return None
-
-def parse_feed(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
-    news_items = soup.find_all('div', class_='news_item')
-    updates = []
-    for item in news_items:
-        title = item.find('h2').text.strip()
-        body = item.find('p').text.strip()
-        date = item.find('span', class_='news_date').text.strip() if item.find('span', class_='news_date') else "No date"
-        updates.append({
-            'title': title,
-            'body': body,
-            'date': date
-        })
-    return updates
-
-def send_notification(title, body):
-    os.system(f'termux-notification --title "{title}" --content "{body}"')
-
-def check_for_updates():
-    last_check_data = get_last_check_data()
-    current_time = time.time()
-
-    html_content = fetch_zeronet_feed()
-    if html_content:
-        updates = parse_feed(html_content)
-        new_updates = [u for u in updates if u['title'] not in last_check_data["seen_titles"]]
-
-        for update in new_updates:
-            send_notification(update['title'], update['body'])
-            last_check_data["seen_titles"].append(update['title'])
-
-        if new_updates:
-            print(f"Sent {len(new_updates)} new notifications.")
-        else:
-            print("No new updates.")
-
-        # Keep only the last 100 seen titles to prevent the file from growing too large
-        last_check_data["seen_titles"] = last_check_data["seen_titles"][-100:]
-        last_check_data["last_check"] = current_time
-        save_last_check_data(last_check_data)
-
-if __name__ == "__main__":
-    check_for_updates()
-EOL
-    chmod +x "$script_path"
-    log "Created ZeroNet monitoring script at $script_path"
-}
-
-setup_monitoring_cronjob() {
-    local cron_schedule="*/5 * * * *"
-    local script_path="$HOME/zeronet_monitor.py"
-    (crontab -l 2>/dev/null; echo "$cron_schedule /data/data/com.termux/files/usr/bin/python $script_path") | crontab -
-    log "Set up cronjob to run ZeroNet monitoring script every 5 minutes"
-}
-
-log "Do you want to set up ZeroNet newsfeed monitoring? This will send notifications for new updates. (y/n)"
-read -r monitor_setup
-
-if [[ $monitor_setup =~ ^[Yy]$ ]]; then
-    log "Setting up ZeroNet monitoring..."
-    
-    # Install required Python packages
-    pip install requests beautifulsoup4
-
-    # Create the monitoring script
-    create_monitoring_script
-    
-    # Set up the cronjob
-    setup_monitoring_cronjob
-    
-    # Start the cron service
-    if ! pgrep -x "crond" > /dev/null; then
-        crond
-        log "Started crond service"
-    else
-        log "crond service is already running"
-    fi
-    
-    log "ZeroNet monitoring setup complete. Notifications will be sent for new updates every 5 minutes."
-else
-    log "ZeroNet monitoring setup skipped."
-fi
-
 TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
-    # Check if Termux:Boot directory exists, create if it doesn't
     if [ ! -d "$TERMUX_BOOT_DIR" ]; then
         log "Termux:Boot directory not found. Creating it..."
         mkdir -p "$TERMUX_BOOT_DIR"
@@ -580,21 +492,16 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
         fi
     fi
 
-    # Only create the boot script if the directory exists
     if [ -d "$TERMUX_BOOT_DIR" ]; then
         cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
-ZERONET_DIR="/data/data/com.termux/files/home/apps/zeronet"
-TORRC_FILE="/data/data/com.termux/files/home/.tor/torrc"
-
 export PATH=$PATH:/data/data/com.termux/files/usr/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
-    tor -f "$TORRC_FILE" &
-    # Wait until Tor is ready
+    tor -f "/data/data/com.termux/files/home/.tor/torrc" &
     for i in {1..30}; do
         if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
             break
@@ -604,7 +511,7 @@ start_tor() {
 }
 
 start_zeronet() {
-    cd "$ZERONET_DIR"
+    cd "/data/data/com.termux/files/home/apps/zeronet"
     . ./venv/bin/activate
     python3 zeronet.py &
 
@@ -617,7 +524,7 @@ start_tor
 start_zeronet
 EOL
 
-        chmod +x "$BOOT_SCRIPT"
+    chmod +x "$BOOT_SCRIPT"
         log "Termux Boot script created at $BOOT_SCRIPT"
     else
         log "Termux:Boot directory not found. Boot script creation skipped."
@@ -639,17 +546,14 @@ start_zeronet() {
     cd $ZERONET_DIR
     . ./venv/bin/activate
 
-    # Add Termux bin to PATH
     export PATH=$PATH:$PREFIX/bin
 
-    # Check for existing ZeroNet processes
     if pgrep -f "python3.*zeronet.py" > /dev/null; then
         log "Existing ZeroNet process found. Terminating..."
         pkill -f "python3.*zeronet.py"
-        sleep 5  # Wait for the process to terminate
+        sleep 5
     fi
 
-    # Remove lock file if it exists
     LOCK_FILE="$ZERONET_DIR/data/lock.pid"
     if [ -f "$LOCK_FILE" ]; then
         log "Removing stale lock file..."
@@ -667,16 +571,13 @@ start_zeronet() {
         log "Skipping renaming of disabled-Bootstrapper folder"
     fi
 
-    # Add a small delay before starting ZeroNet
     sleep 2
 
-    # Start ZeroNet with the updated PATH
     python3 zeronet.py &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
 
-    # Wait a moment to check if the process is still running
     sleep 5
     if ! ps -p $ZERONET_PID > /dev/null; then
         log_error "ZeroNet process terminated unexpectedly. Check logs for details."
@@ -684,14 +585,12 @@ start_zeronet() {
     fi
 }
 
-log "Downloading GeoLite2 City database..."
-
-GEOIP_DB_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
-GEOIP_DB_PATH="$ZERONET_DIR/data/GeoLite2-City.mmdb"
-
 download_geoip_database() {
+    GEOIP_DB_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/GeoLite2-City.mmdb.gz"
+    GEOIP_DB_PATH="$ZERONET_DIR/data/GeoLite2-City.mmdb"
+
     while true; do
-        log "Attempting to download GeoLite2 City database..."
+        whiptail --infobox "Downloading GeoLite2 City database..." $HEIGHT $WIDTH
         if curl -A "$USER_AGENT" \
             -H "Accept: application/octet-stream" \
             -s -f -L "$GEOIP_DB_URL" -o "${GEOIP_DB_PATH}.gz"; then
@@ -707,12 +606,13 @@ download_geoip_database() {
     done
 }
 
-# Call the function to download and unpack the GeoLite2 City database
 download_geoip_database
 
 check_openssl
 log "Starting ZeroNet..."
-start_zeronet
+(
+    start_zeronet
+) | whiptail --gauge "Starting ZeroNet..." $HEIGHT $WIDTH 0
 
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
@@ -723,8 +623,8 @@ download_syncronite() {
     ZIP_DIR="$ZERONET_DIR/data/$SYNCRONITE_ADDRESS"
 
     mkdir -p "$ZIP_DIR"
-    if curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"; then
-        unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
+    if curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip" >/dev/null 2>&1; then
+        unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR" >/dev/null 2>&1
         rm "$ZIP_DIR/content.zip"
         log "Syncronite content downloaded and extracted to $ZIP_DIR"
         return 0
@@ -735,10 +635,7 @@ download_syncronite() {
 }
 
 provide_syncronite_instructions() {
-    log "To add Syncronite to your ZeroNet:"
-    log "1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS"
-    log "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
-    log "Note: Only open links to ZeroNet sites that you trust."
+    whiptail --msgbox "To add Syncronite to your ZeroNet:\n1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS\n2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link.\nNote: Only open links to ZeroNet sites that you trust." $HEIGHT $WIDTH
 }
 
 if download_syncronite; then
@@ -752,7 +649,6 @@ update_trackers
 
 log "ZeroNet setup complete."
 
-# Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
     termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
@@ -761,28 +657,3 @@ fi
 
 log "ZeroNet is running successfully. Syncronite content is available."
 provide_syncronite_instructions
-
-log "ZeroNet installation and setup is complete."
-log "You can access ZeroNet by opening http://$UI_IP:$UI_PORT in your web browser."
-
-if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
-    log "Your Onion address is: $ONION_ADDRESS"
-    log "You can share this address with others to access your ZeroNet node through Tor."
-fi
-
-if [[ $monitor_setup =~ ^[Yy]$ ]]; then
-    log "ZeroNet monitoring is set up. You will receive notifications for new updates every 5 minutes."
-fi
-
-if [[ $boot_setup =~ ^[Yy]$ ]]; then
-    log "ZeroNet is set to start automatically on boot."
-fi
-
-log "Thank you for using this ZeroNet installer script."
-log "If you encounter any issues or need further assistance, please refer to the ZeroNet documentation or community forums."
-
-# Clean up
-unset ZERONET_DIR LOG_FILE TORRC_FILE TOR_PROXY_PORT TOR_CONTROL_PORT UI_IP UI_PORT SYNCRONITE_ADDRESS USER_AGENT
-
-log "Installation process completed. Exiting script."
-exit 0
