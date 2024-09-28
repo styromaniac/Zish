@@ -2,8 +2,10 @@
 
 termux-wake-lock
 
+echo "Updating Termux repositories. Please select your preferred mirror when prompted."
 termux-change-repo
 
+echo "Setting up Termux storage. You may need to grant storage permission."
 termux-setup-storage
 
 ZERONET_DIR="$HOME/apps/zeronet"
