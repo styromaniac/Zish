@@ -2,11 +2,15 @@
 
 termux-wake-lock
 
-echo "Updating Termux repositories. Please select your preferred mirror when prompted."
+echo "ZeroNet installation: Step 1 of 4 - Updating Termux repositories"
+echo "Please select your preferred mirror when prompted."
 termux-change-repo
+echo "Repository update completed."
 
-echo "Setting up Termux storage. You may need to grant storage permission."
+echo "ZeroNet installation: Step 2 of 4 - Setting up Termux storage"
+echo "You may need to grant storage permission."
 termux-setup-storage
+echo "Storage setup completed."
 
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
@@ -18,13 +22,17 @@ UI_PORT=43110
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
+# Create a temporary directory in the user's home folder
+WORK_DIR="$HOME/zeronet_tmp"
+mkdir -p "$WORK_DIR"
+chmod -R 755 "$WORK_DIR"
+
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
 log_error() {
     log "[ERROR] $1"
-    echo "Error: $1" >&2
     exit 1
 }
 
@@ -38,7 +46,8 @@ show_progress() {
     printf "\rProgress: [%-${width}s] %d%%" "$(printf '#%.0s' $(seq 1 $completed))$(printf ' %.0s' $(seq 1 $remaining))" $percentage
 }
 
-# User prompts
+echo "ZeroNet installation: Step 3 of 4 - Gathering information"
+
 echo "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
 read -r zeronet_source
 
@@ -51,9 +60,9 @@ read -r onion_tracker_setup
 echo "Do you want to set up auto-start with Termux:Boot? (y/n)"
 read -r boot_setup
 
-echo "Starting ZeroNet installation..."
+echo "ZeroNet installation: Step 4 of 4 - Installing ZeroNet"
+echo "This may take several minutes. Please be patient."
 
-# Main installation steps
 total_steps=10
 current_step=0
 
@@ -68,7 +77,7 @@ update_mirrors() {
             log "Failed to update package lists. Attempt $attempt of $max_attempts."
             if [ $attempt -lt $max_attempts ]; then
                 log "Trying a different mirror..."
-                termux-change-repo &>/dev/null
+                termux-change-repo
                 sleep 5
             fi
             ((attempt++))
@@ -86,7 +95,7 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq rust openssl-tool net-tools
+    clang make termux-api tor perl jq rust openssl-tool iproute2
 )
 
 install_package() {
@@ -147,7 +156,7 @@ install_python_packages() {
                     # Kill any hanging processes
                     pkill -f "pip install" &>/dev/null
                     # Clean up temporary directories
-                    rm -rf /tmp/pip-*
+                    rm -rf "$HOME/.cache/pip"
                 fi
             fi
         done
@@ -200,7 +209,6 @@ fi
 
 mkdir -p "$ZERONET_DIR"
 
-WORK_DIR="$(mktemp -d "$HOME/tmp.XXXXXX")"
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 
 download_with_retries() {
@@ -372,7 +380,7 @@ generate_random_port() {
         fi
         
         # Check if the port is already in use
-        if ! netstat -tuln | grep -q ":$RANDOM_PORT "; then
+        if ! ss -tuln | grep -q ":$RANDOM_PORT "; then
             log "Selected available port $RANDOM_PORT for ZeroNet."
             FILESERVER_PORT=$RANDOM_PORT
             log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
@@ -513,7 +521,7 @@ start_zeronet() {
 
     ZERONET_PID=$!
     echo "ZeroNet started with PID $ZERONET_PID"
-    termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
 }
 
 start_tor
@@ -530,7 +538,7 @@ else
 fi
 
 check_openssl() {
-    if command -v openssl >/dev/null 2>&1; then
+    if command -v openssl &>/dev/null; then
         log "OpenSSL is available. Version: $(openssl version)"
     else
         log_error "OpenSSL is not found in PATH. Please ensure it's installed."
@@ -577,7 +585,7 @@ start_zeronet() {
     python3 zeronet.py &>/dev/null &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
-    termux-notification --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
 
     # Wait a moment to check if the process is still running
     sleep 5
@@ -662,9 +670,15 @@ log "ZeroNet setup complete."
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
-    termux-notification --title "ZeroNet Error" --content "Failed to start ZeroNet"
+    termux-notification --id "zeronet_error" --title "ZeroNet Error" --content "Failed to start ZeroNet"
     exit 1
 fi
 
 log "ZeroNet is running successfully. Syncronite content is available."
 provide_syncronite_instructions
+
+# Clean up
+rm -rf "$WORK_DIR"
+
+echo "ZeroNet installation completed successfully!"
+echo "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
