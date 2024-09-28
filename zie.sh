@@ -522,6 +522,7 @@ start_zeronet() {
     ZERONET_PID=$!
     echo "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+    termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://$UI_IP:$UI_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'"
 }
 
 start_tor
@@ -586,6 +587,7 @@ start_zeronet() {
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+    termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://$UI_IP:$UI_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'"
 
     # Wait a moment to check if the process is still running
     sleep 5
@@ -650,10 +652,20 @@ download_syncronite() {
 }
 
 provide_syncronite_instructions() {
+    local instructions="To add Syncronite to ZeroNet:
+1. Open ZeroNet at http://$UI_IP:$UI_PORT
+2. Visit http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS
+3. ZeroNet will add Syncronite to your dashboard
+Note: Only open links to ZeroNet sites that you trust."
+    
     log "To add Syncronite to your ZeroNet:"
     log "1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS"
     log "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
     log "Note: Only open links to ZeroNet sites that you trust."
+    
+    termux-notification --id "syncronite_url" --title "Syncronite URL" --content "http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS'"
+    
+    termux-notification --id "syncronite_instructions" --title "Syncronite Instructions" --content "$instructions"
 }
 
 if download_syncronite; then
@@ -671,6 +683,7 @@ log "ZeroNet setup complete."
 if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
     termux-notification --id "zeronet_error" --title "ZeroNet Error" --content "Failed to start ZeroNet"
+    termux-notification --id "zeronet_url" --remove
     exit 1
 fi
 
