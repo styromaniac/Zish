@@ -2,9 +2,9 @@
 
 termux-wake-lock
 
-termux-change-repo &>/dev/null
+termux-change-repo
 
-termux-setup-storage &>/dev/null
+termux-setup-storage
 
 ZERONET_DIR="$HOME/apps/zeronet"
 LOG_FILE="$HOME/zeronet_install.log"
