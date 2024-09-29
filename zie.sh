@@ -4,7 +4,7 @@ termux-wake-lock
 
 echo "ZeroNet installation: Step 1 of 4 - Updating Termux repositories"
 echo "Please select your preferred mirror when prompted."
-termux-change-repo > /dev/null
+termux-change-repo
 echo "Repository update completed."
 
 echo "ZeroNet installation: Step 2 of 4 - Setting up Termux storage"
@@ -686,7 +686,6 @@ Note: Only open links to ZeroNet sites that you trust."
 
 if download_syncronite; then
     log "Syncronite content is now available in your ZeroNet data directory."
-    provide_syncronite_instructions
 else
     log_error "Failed to prepare Syncronite content. You may need to add it manually later."
 fi
@@ -699,12 +698,10 @@ log_and_show "ZeroNet setup complete."
 if ! pgrep -f "zeronet.py" > /dev/null; then
     log_error "Failed to start ZeroNet"
     termux-notification --id "zeronet_error" --title "ZeroNet Error" --content "Failed to start ZeroNet"
-    termux-notification --id "zeronet_url" --remove
     exit 1
 fi
 
 log_and_show "ZeroNet is running successfully. Syncronite content is available."
-provide_syncronite_instructions
 
 # Clean up
 rm -rf "$WORK_DIR"
@@ -714,7 +711,14 @@ log_and_show "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
 
 log "Installation process completed. Please review the log file at $LOG_FILE for any important messages or errors."
 
-termux-notification --id "zeronet_complete" --title "ZeroNet Installation Complete" --content "ZeroNet is now installed and running. Access it at http://$UI_IP:$UI_PORT"
+termux-notification --id "zeronet_complete" \
+    --title "ZeroNet Installed Successfully" \
+    --content "ZeroNet is running at http://$UI_IP:$UI_PORT. Add Syncronite: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS" \
+    --button1 "Copy ZeroNet URL" \
+    --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'" \
+    --button2 "Copy Syncronite URL" \
+    --button2-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS'" \
+    --ongoing
 
 # Final instructions
 echo ""
