@@ -290,8 +290,6 @@ chmod -R u+rwX "$base_dir" &>/dev/null || { log_error "Failed to adjust permissi
 log "Moving extracted files to $ZERONET_DIR..."
 mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
 
-rm -rf "$WORK_DIR"
-
 if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
     log_error "zeronet.py not found in the expected directory."
     exit 1
@@ -314,6 +312,31 @@ if [ -f requirements.txt ]; then
         exit 1
     fi
 fi
+
+install_zeronetx_plugins() {
+    log "Installing ZeroNetX plugins..."
+    local plugins_dir="$ZERONET_DIR/plugins"
+    local plugins_repo="https://github.com/ZeroNetX/ZeroNet-Plugins.git"
+    local plugins_tmp_dir="$WORK_DIR/zeronet_plugins"
+
+    git_clone_with_retries "$plugins_repo" "$plugins_tmp_dir"
+
+    # Move each plugin to the ZeroNet plugins directory
+    for plugin in "$plugins_tmp_dir"/*; do
+        if [ -d "$plugin" ]; then
+            plugin_name=$(basename "$plugin")
+            mv "$plugin" "$plugins_dir/$plugin_name"
+            log "Installed plugin: $plugin_name"
+        fi
+    done
+
+    # Clean up
+    rm -rf "$plugins_tmp_dir"
+    log "ZeroNetX plugins installation completed."
+}
+
+# Install ZeroNetX plugins
+install_zeronetx_plugins
 
 mkdir -p ./data
 chmod -R u+rwX ./data &>/dev/null
