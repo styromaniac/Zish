@@ -53,7 +53,7 @@ show_progress() {
 
 update_progress() {
     show_progress
-    echo  # Move to a new line after updating progress
+    printf "\033[0K"  # Clear the rest of the line
 }
 
 echo "ZeroNet installation: Step 3 of 4 - Gathering information"
