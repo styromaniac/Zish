@@ -321,12 +321,16 @@ install_zeronetx_plugins() {
 
     git_clone_with_retries "$plugins_repo" "$plugins_tmp_dir"
 
-    # Move each plugin to the ZeroNet plugins directory
+    # Move each plugin to the ZeroNet plugins directory, skipping existing ones
     for plugin in "$plugins_tmp_dir"/*; do
         if [ -d "$plugin" ]; then
             plugin_name=$(basename "$plugin")
-            mv "$plugin" "$plugins_dir/$plugin_name"
-            log "Installed plugin: $plugin_name"
+            if [ ! -d "$plugins_dir/$plugin_name" ]; then
+                mv "$plugin" "$plugins_dir/$plugin_name"
+                log "Installed new plugin: $plugin_name"
+            else
+                log "Skipped existing plugin: $plugin_name"
+            fi
         fi
     done
 
