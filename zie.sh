@@ -4,7 +4,7 @@ termux-wake-lock
 
 echo "ZeroNet installation: Step 1 of 4 - Updating Termux repositories"
 echo "Please select your preferred mirror when prompted."
-termux-change-repo
+termux-change-repo > /dev/null
 echo "Repository update completed."
 
 echo "ZeroNet installation: Step 2 of 4 - Setting up Termux storage"
