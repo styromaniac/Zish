@@ -290,8 +290,6 @@ chmod -R u+rwX "$base_dir" &>/dev/null || { log_error "Failed to adjust permissi
 log "Moving extracted files to $ZERONET_DIR..."
 mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
 
-rm -rf "$WORK_DIR"
-
 if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
     log_error "zeronet.py not found in the expected directory."
     exit 1
@@ -314,6 +312,34 @@ if [ -f requirements.txt ]; then
         exit 1
     fi
 fi
+
+install_contentfilter_plugin() {
+    log "Installing ContentFilter plugin..."
+    local plugins_dir="$ZERONET_DIR/plugins"
+    local plugins_repo="https://github.com/ZeroNetX/ZeroNet-Plugins.git"
+    local plugins_tmp_dir="$WORK_DIR/zeronet_plugins"
+
+    if [ ! -d "$plugins_dir/ContentFilter" ]; then
+        git_clone_with_retries "$plugins_repo" "$plugins_tmp_dir"
+
+        if [ -d "$plugins_tmp_dir/ContentFilter" ]; then
+            mv "$plugins_tmp_dir/ContentFilter" "$plugins_dir/ContentFilter"
+            log "Installed ContentFilter plugin"
+        else
+            log "ContentFilter plugin not found in the repository"
+        fi
+
+        # Clean up
+        rm -rf "$plugins_tmp_dir"
+    else
+        log "ContentFilter plugin already exists, skipping installation"
+    fi
+
+    log "ContentFilter plugin installation completed."
+}
+
+# Install ContentFilter plugin
+install_contentfilter_plugin
 
 mkdir -p ./data
 chmod -R u+rwX ./data &>/dev/null
