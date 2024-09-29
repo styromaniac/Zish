@@ -42,20 +42,6 @@ log_error() {
     exit 1
 }
 
-total_steps=20
-current_step=0
-
-show_progress() {
-    current_step=$((current_step + 1))
-    percentage=$((current_step * 100 / total_steps))
-    printf "\rProgress: %3d%%" $percentage
-}
-
-update_progress() {
-    show_progress
-    printf "\033[0K"  # Clear the rest of the line
-}
-
 echo "ZeroNet installation: Step 3 of 4 - Gathering information"
 
 echo "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
@@ -95,10 +81,8 @@ update_mirrors() {
 }
 
 update_mirrors || exit 1
-update_progress
 
 yes | pkg upgrade &>/dev/null
-update_progress
 
 required_packages=(
     termux-tools termux-keyring python
@@ -133,13 +117,11 @@ for package in "${required_packages[@]}"; do
         install_package "$package" || exit 1
     fi
 done
-update_progress
 
 log "Installing OpenSSL from Termux repository..."
 yes | pkg install -y openssl-tool &>/dev/null || log_error "Failed to install OpenSSL from repository"
 
 log "OpenSSL installation completed."
-update_progress
 
 install_python_packages() {
     log "Installing required Python packages..."
@@ -210,7 +192,6 @@ install_python_packages() {
 }
 
 install_python_packages || exit 1
-update_progress
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -295,7 +276,6 @@ else
     log_error "Invalid input. Please provide a valid Git URL, ZIP URL, or file path."
     exit 1
 fi
-update_progress
 
 log "Adjusting ownership of files before moving..."
 chmod -R u+rwX "$base_dir" &>/dev/null || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
@@ -325,7 +305,6 @@ if [ -f requirements.txt ]; then
         exit 1
     fi
 fi
-update_progress
 
 install_contentfilter_plugin() {
     log "Installing ContentFilter plugin..."
@@ -354,7 +333,6 @@ install_contentfilter_plugin() {
 
 # Install ContentFilter plugin
 install_contentfilter_plugin
-update_progress
 
 mkdir -p ./data
 chmod -R u+rwX ./data &>/dev/null
@@ -372,7 +350,6 @@ elif [ -n "$users_json_source" ]; then
         exit 1
     fi
 fi
-update_progress
 
 mkdir -p $PREFIX/var/log/
 
@@ -485,7 +462,6 @@ update_trackers
 generate_random_port
 create_zeronet_conf
 configure_tor
-update_progress
 
 log "Starting Tor service..."
 tor -f $TORRC_FILE &>/dev/null &
@@ -518,7 +494,6 @@ else
     log_error "Tor process is not running. There may have been an issue starting Tor."
     exit 1
 fi
-update_progress
 
 TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
@@ -571,7 +546,7 @@ start_tor
 start_zeronet
 EOL
 
-chmod +x "$BOOT_SCRIPT"
+        chmod +x "$BOOT_SCRIPT"
         log "Termux Boot script created at $BOOT_SCRIPT"
     else
         log "Termux:Boot directory not found. Boot script creation skipped."
@@ -579,7 +554,6 @@ chmod +x "$BOOT_SCRIPT"
 else
     log "Boot script setup skipped. To set up auto-start later, ensure Termux:Boot is installed and run this script again."
 fi
-update_progress
 
 check_openssl() {
     if command -v openssl &>/dev/null; then
@@ -667,12 +641,10 @@ download_geoip_database() {
 
 # Call the function to download and unpack the GeoLite2 City database
 download_geoip_database
-update_progress
 
 check_openssl
 log "Starting ZeroNet..."
 start_zeronet
-update_progress
 
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
@@ -718,10 +690,8 @@ if download_syncronite; then
 else
     log_error "Failed to prepare Syncronite content. You may need to add it manually later."
 fi
-update_progress
 
 update_trackers
-update_progress
 
 log_and_show "ZeroNet setup complete."
 
@@ -741,9 +711,6 @@ rm -rf "$WORK_DIR"
 
 log_and_show "ZeroNet installation completed successfully!"
 log_and_show "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
-
-# Final progress update
-update_progress
 
 log "Installation process completed. Please review the log file at $LOG_FILE for any important messages or errors."
 
