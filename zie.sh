@@ -39,11 +39,8 @@ log_error() {
 show_progress() {
     local current=$1
     local total=$2
-    local width=50
     local percentage=$((current * 100 / total))
-    local completed=$((width * current / total))
-    local remaining=$((width - completed))
-    printf "\rProgress: [%-${width}s] %d%%" "$(printf '#%.0s' $(seq 1 $completed))$(printf ' %.0s' $(seq 1 $remaining))" $percentage
+    printf "\rProgress: %3d%% " $percentage
 }
 
 echo "ZeroNet installation: Step 3 of 4 - Gathering information"
