@@ -169,9 +169,55 @@ EOL
         return 1
     fi
 
+    # Check if 'rich' is imported in any of the Python files
+    if grep -r "from rich import" "$ZERONET_DIR" || grep -r "import rich" "$ZERONET_DIR"; then
+        log "Detected 'rich' module usage. Installing 'rich'..."
+        if pip install rich; then
+            log "Successfully installed 'rich' module"
+        else
+            log "Failed to install 'rich' module. Creating a dummy 'rich' module..."
+            create_dummy_rich
+        fi
+    else
+        log "No 'rich' module usage detected. Skipping 'rich' installation."
+    fi
+
     # Verify installations
     log "Verifying installations..."
     python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+}
+
+create_dummy_rich() {
+    log "Creating dummy rich module..."
+    cat > "$ZERONET_DIR/rich.py" << EOL
+class Console:
+    def print(*args, **kwargs):
+        print(*args, **kwargs)
+
+def print(*args, **kwargs):
+    __builtins__['print'](*args, **kwargs)
+EOL
+    log "Dummy rich module created at $ZERONET_DIR/rich.py"
+}
+
+modify_zeronet_source() {
+    local greet_file="$ZERONET_DIR/greet.py"
+    if [ -f "$greet_file" ]; then
+        log "Modifying $greet_file to handle missing 'rich' module..."
+        sed -i '1ifancy_greet_disabled = False\ntry:\n    from rich.console import Console\nexcept ImportError:\n    fancy_greet_disabled = True\n    print("Warning: rich module not available, using basic output")' "$greet_file"
+        sed -i 's/def fancy_greet(/def fancy_greet_original(/g' "$greet_file"
+        cat >> "$greet_file" << EOL
+
+def fancy_greet(version):
+    if fancy_greet_disabled:
+        print(f"ZeroNet version: {version}")
+    else:
+        fancy_greet_original(version)
+EOL
+        log "Modified $greet_file successfully"
+    else
+        log "Warning: $greet_file not found, skipping modification"
+    fi
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
@@ -437,33 +483,6 @@ EOL
     log "Tor configuration created at $TORRC_FILE"
 }
 
-create_dummy_rich() {
-    log "Creating dummy rich.py files..."
-    possible_paths=(
-        "$ZERONET_DIR/src"
-        "$ZERONET_DIR"
-        "$ZERONET_DIR/lib"
-        "$ZERONET_DIR/plugins"
-        "$ZERONET_DIR/venv/lib/python3.11/site-packages"
-    )
-
-    for path in "${possible_paths[@]}"; do
-        local rich_file="$path/rich.py"
-        mkdir -p "$(dirname "$rich_file")"
-        cat > "$rich_file" << EOL
-def print(*args, **kwargs):
-    __builtins__['print'](*args, **kwargs)
-
-class Console:
-    def print(*args, **kwargs):
-        __builtins__['print'](*args, **kwargs)
-EOL
-        log "Dummy rich.py file created at $rich_file"
-    done
-
-    log "Dummy rich.py files created in multiple possible locations"
-}
-
 update_trackers
 generate_random_port
 create_zeronet_conf
@@ -577,9 +596,6 @@ start_zeronet() {
     # Add Termux bin to PATH
     export PATH=$PATH:$PREFIX/bin
 
-    # Create dummy rich.py files
-    create_dummy_rich
-
     # Check for existing ZeroNet processes
     if pgrep -f "python.*zeronet.py" > /dev/null; then
         log "Existing ZeroNet process found. Terminating..."
@@ -609,7 +625,7 @@ start_zeronet() {
     sleep 2
 
     # Start ZeroNet with the updated PATH and debug output
-    python -v zeronet.py > zeronet_debug.log 2>&1 &
+    python zeronet.py > zeronet_debug.log 2>&1 &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
@@ -619,7 +635,6 @@ start_zeronet() {
     sleep 5
     if ! ps -p $ZERONET_PID > /dev/null; then
         log_error "ZeroNet process terminated unexpectedly. Check logs for details."
-        log "Debug log contents:"
         cat zeronet_debug.log
         exit 1
     fi
@@ -721,3 +736,9 @@ log_and_show "ZeroNet installation completed successfully!"
 log_and_show "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
 
 log "Installation process completed. Please review the log file at $LOG_FILE for details."
+
+# Provide instructions for adding Syncronite
+provide_syncronite_instructions
+
+# Final message
+log_and_show "Thank you for installing ZeroNet. Enjoy your decentralized web experience!"
