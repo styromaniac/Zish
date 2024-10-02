@@ -437,12 +437,15 @@ EOL
     log "Tor configuration created at $TORRC_FILE"
 }
 
-remove_rich_imports() {
-    log "Removing rich library imports from ZeroNet source code..."
-    find "$ZERONET_DIR" -type f -name "*.py" -print0 | xargs -0 sed -i 's/from rich import print/# rich import removed/g'
-    find "$ZERONET_DIR" -type f -name "*.py" -print0 | xargs -0 sed -i 's/import rich/# rich import removed/g'
-    find "$ZERONET_DIR" -type f -name "*.py" -print0 | xargs -0 sed -i 's/from rich import \*/# rich import removed/g'
-    log "Finished removing rich library imports."
+create_dummy_rich() {
+    log "Creating dummy rich.py file..."
+    local rich_file="$ZERONET_DIR/src/rich.py"
+    mkdir -p "$(dirname "$rich_file")"
+    cat > "$rich_file" << EOL
+def print(*args, **kwargs):
+    __builtins__['print'](*args, **kwargs)
+EOL
+    log "Dummy rich.py file created at $rich_file"
 }
 
 update_trackers
@@ -558,8 +561,8 @@ start_zeronet() {
     # Add Termux bin to PATH
     export PATH=$PATH:$PREFIX/bin
 
-    # Remove rich imports
-    remove_rich_imports
+    # Create dummy rich.py
+    create_dummy_rich
 
     # Check for existing ZeroNet processes
     if pgrep -f "python.*zeronet.py" > /dev/null; then
