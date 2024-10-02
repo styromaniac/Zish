@@ -176,22 +176,30 @@ EOL
 
 modify_zeronet_source() {
     local greet_file="$ZERONET_DIR/greet.py"
-    if [ -f "$greet_file" ]; then
-        log "Modifying $greet_file to handle missing 'rich' module..."
-        sed -i '1s/^/import sys\n/' "$greet_file"
-        sed -i '/from rich\.console import Console/i\
+    local requirements_file="$WORK_DIR/requirements.txt"  # This is the extracted version's path
+    # Check if the extracted requirements.txt file exists and if it lists 'rich'
+    if [ -f "$requirements_file" ] && grep -q 'rich' "$requirements_file"; then
+        log "Detected 'rich' in extracted requirements.txt. Modifying $greet_file to handle missing 'rich' module..."
+        # Modify greet.py to handle missing 'rich' module
+        if [ -f "$greet_file" ]; then
+            sed -i '/from rich.console import Console/i\
 try:\n\
     from rich.console import Console\n\
 except ImportError:\n\
     print("Warning: rich module not available, using basic output")\n\
     class Console:\n\
-        def print(*args, **kwargs):\n\
-            print(*args, file=sys.stderr, **kwargs)\n\
+        def __init__(self):\n\
+            pass\n\
+        def print(self, *args, **kwargs):\n\
+            print(*args, **kwargs)\n\
 ' "$greet_file"
-        sed -i 's/^from rich\.console import Console/# &/' "$greet_file"
-        log "Modified $greet_file successfully"
+            sed -i 's/^from rich\.console import Console/# &/' "$greet_file"
+            log "Modified $greet_file successfully"
+        else
+            log "Warning: $greet_file not found, skipping modification"
+        fi
     else
-        log "Warning: $greet_file not found, skipping modification"
+        log "No 'rich' found in extracted requirements.txt. Skipping modification."
     fi
 }
 
