@@ -178,26 +178,23 @@ install_python_packages() {
         return 0
     }
 
+install_package_with_fallbacks setuptools || return 1
 install_package_with_fallbacks gevent || return 1
+install_package_with_fallbacks PySocks || return 1
+install_package_with_fallbacks requests || return 1
+install_package_with_fallbacks gevent-ws || return 1
+install_package_with_fallbacks cryptography || return 1
+install_package_with_fallbacks pycryptodome || return 1
+install_package_with_fallbacks coincurve || return 1
+install_package_with_fallbacks GitPython || return 1
 install_package_with_fallbacks msgpack || return 1
 install_package_with_fallbacks base58 || return 1
 install_package_with_fallbacks merkletools || return 1
-install_package_with_fallbacks rsa || return 1
-install_package_with_fallbacks PySocks || return 1
-install_package_with_fallbacks websocket_client || return 1
-install_package_with_fallbacks gevent-ws || return 1
-install_package_with_fallbacks coincurve || return 1
 install_package_with_fallbacks maxminddb || return 1
 install_package_with_fallbacks rich || return 1
 install_package_with_fallbacks defusedxml || return 1
 install_package_with_fallbacks pyaes || return 1
-install_package_with_fallbacks requests || return 1
 install_package_with_fallbacks ipython || return 1
-install_package_with_fallbacks GitPython || return 1
-install_package_with_fallbacks pycryptodome || return 1
-install_package_with_fallbacks cryptography || return 1
-install_package_with_fallbacks pyOpenSSL || return 1
-install_package_with_fallbacks setuptools || return 1
 
     log "Verifying installations..."
     python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" &>/dev/null || log_error "Failed to import one or more required Python packages"
