@@ -63,7 +63,7 @@ update_mirrors() {
     local max_attempts=5
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if yes | pkg update &>/dev/null; then
+        if yes | pkg update; then
             log "Successfully updated package lists"
             return 0
         else
@@ -82,7 +82,7 @@ update_mirrors() {
 
 update_mirrors || exit 1
 
-yes | pkg upgrade &>/dev/null
+yes | pkg upgrade
 
 required_packages=(
     termux-tools termux-keyring python
@@ -96,7 +96,7 @@ install_package() {
     local max_attempts=3
     local attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if yes | pkg install -y "$package" &>/dev/null; then
+        if yes | pkg install -y "$package"; then
             log "Successfully installed $package"
             return 0
         else
@@ -113,13 +113,13 @@ install_package() {
 }
 
 for package in "${required_packages[@]}"; do
-    if ! dpkg -s "$package" &>/dev/null 2>&1; then
+    if ! dpkg -s "$package" 2>&1; then
         install_package "$package" || exit 1
     fi
 done
 
 log "Installing OpenSSL from Termux repository..."
-yes | pkg install -y openssl-tool &>/dev/null || log_error "Failed to install OpenSSL from repository"
+yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
 
 log "OpenSSL installation completed."
 
@@ -128,7 +128,7 @@ install_python_packages() {
     export CFLAGS="-I$PREFIX/include"
     export LDFLAGS="-L$PREFIX/lib"
 
-    pip install --upgrade pip setuptools wheel &>/dev/null
+    pip install --upgrade pip setuptools wheel
 
     MAX_RETRIES=3
     RETRY_DELAY=10
@@ -137,7 +137,7 @@ install_python_packages() {
         local package=$1
         local retries=0
         while [ $retries -lt $MAX_RETRIES ]; do
-            if pip install --no-deps $package &>/dev/null; then
+            if pip install --no-deps $package; then
                 log "Successfully installed $package"
                 return 0
             else
@@ -147,7 +147,7 @@ install_python_packages() {
                     log "Retrying in $RETRY_DELAY seconds..."
                     sleep $RETRY_DELAY
                     # Kill any hanging processes
-                    pkill -f "pip install" &>/dev/null
+                    pkill -f "pip install"
                     # Clean up temporary directories
                     rm -rf "$HOME/.cache/pip"
                 fi
@@ -162,10 +162,10 @@ install_python_packages() {
         local package=$1
         if ! install_package_with_retry $package; then
             log "Attempting to install $package with binary distribution..."
-            if ! pip install --only-binary=:all: $package &>/dev/null; then
+            if ! pip install --only-binary=:all: $package; then
                 if [ "$package" = "cryptography" ]; then
                     log "Attempting to install cryptography without Rust..."
-                    if ! CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography &>/dev/null; then
+                    if ! CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography; then
                         log_error "All installation methods failed for $package"
                         return 1
                     fi
@@ -197,7 +197,7 @@ install_package_with_fallbacks pyaes || return 1
 install_package_with_fallbacks ipython || return 1
 
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" &>/dev/null || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 install_python_packages || exit 1
@@ -205,7 +205,7 @@ install_python_packages || exit 1
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
     log "Proceeding to adjust permissions and clean the directory."
-    chmod -R u+rwX "$ZERONET_DIR" &>/dev/null || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
+    chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
     rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
 fi
 
@@ -236,7 +236,7 @@ git_clone_with_retries() {
 
     while true; do
         log "Attempting to clone $repo_url..."
-        if git clone "$repo_url" "$target_dir" &>/dev/null; then
+        if git clone "$repo_url" "$target_dir"; then
             log "Successfully cloned $repo_url"
             break
         else
@@ -253,7 +253,7 @@ if [[ "$zeronet_source" == http*".git" ]]; then
 elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".tar.gz" ]]; then
     download_with_retries "$zeronet_source" "zeronet_archive"
     if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" &>/dev/null || { log_error "Failed to unzip $zeronet_source"; exit 1; }
+        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip $zeronet_source"; exit 1; }
     elif [[ "$zeronet_source" == *.tar.gz ]]; then
         tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract $zeronet_source"; exit 1; }
     fi
@@ -267,7 +267,7 @@ elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".ta
 elif [ -f "$zeronet_source" ]; then
     cp "$zeronet_source" zeronet_archive
     if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" &>/dev/null || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
+        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
     elif [[ "$zeronet_source" == *.tar.gz ]]; then
         tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
     else
@@ -287,7 +287,7 @@ else
 fi
 
 log "Adjusting ownership of files before moving..."
-chmod -R u+rwX "$base_dir" &>/dev/null || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
+chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
 
 log "Moving extracted files to $ZERONET_DIR..."
 mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
@@ -300,12 +300,12 @@ fi
 cd "$ZERONET_DIR" || exit 1
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python3 -m venv "$ZERONET_DIR/venv" &>/dev/null
+    python3 -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
-chmod -R u+rwX "$ZERONET_DIR" &>/dev/null
+chmod -R u+rwX "$ZERONET_DIR"
 
 install_contentfilter_plugin() {
     log "Installing ContentFilter plugin..."
@@ -336,7 +336,7 @@ install_contentfilter_plugin() {
 install_contentfilter_plugin
 
 mkdir -p ./data
-chmod -R u+rwX ./data &>/dev/null
+chmod -R u+rwX ./data
 
 if [[ "$users_json_source" == http* ]]; then
     mkdir -p data
@@ -372,7 +372,7 @@ update_trackers() {
         log "Attempting to download tracker list from $tracker_url..."
         if curl -A "$USER_AGENT" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
             log "Successfully downloaded tracker list from $tracker_url"
-            chmod 644 "$TRACKERS_FILE" &>/dev/null
+            chmod 644 "$TRACKERS_FILE"
             return
         else
             log "Failed to download from $tracker_url."
@@ -465,7 +465,7 @@ create_zeronet_conf
 configure_tor
 
 log "Starting Tor service..."
-tor -f $TORRC_FILE &>/dev/null &
+tor -f $TORRC_FILE &
 TOR_PID=$!
 
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
@@ -522,7 +522,7 @@ export PATH=$PATH:/data/data/com.termux/files/usr/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
-    tor -f "/data/data/com.termux/files/home/.tor/torrc" &>/dev/null &
+    tor -f "/data/data/com.termux/files/home/.tor/torrc" &
     # Wait until Tor is ready
     for i in {1..30}; do
         if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
@@ -535,7 +535,7 @@ start_tor() {
 start_zeronet() {
     cd "/data/data/com.termux/files/home/apps/zeronet"
     . ./venv/bin/activate
-    python3 zeronet.py &>/dev/null &
+    python3 zeronet.py &
 
     ZERONET_PID=$!
     echo "ZeroNet started"
@@ -557,7 +557,7 @@ else
 fi
 
 check_openssl() {
-    if command -v openssl &>/dev/null; then
+    if command -v openssl; then
         log "OpenSSL is available. Version: $(openssl version)"
     else
         log_error "OpenSSL is not found in PATH. Please ensure it's installed."
@@ -601,7 +601,7 @@ start_zeronet() {
     sleep 2
 
     # Start ZeroNet with the updated PATH
-    python3 zeronet.py &>/dev/null &
+    python3 zeronet.py &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
@@ -629,8 +629,8 @@ download_geoip_database() {
             -H "Accept: application/octet-stream" \
             -s -f -L "$GEOIP_DB_URL" -o "${GEOIP_DB_PATH}.gz"; then
             log "Successfully downloaded GeoLite2 City database."
-            gunzip -f "${GEOIP_DB_PATH}.gz" &>/dev/null
-            chmod 644 "$GEOIP_DB_PATH" &>/dev/null
+            gunzip -f "${GEOIP_DB_PATH}.gz"
+            chmod 644 "$GEOIP_DB_PATH"
             log "GeoLite2 City database unpacked and ready at $GEOIP_DB_PATH"
             break
         else
@@ -658,7 +658,7 @@ download_syncronite() {
     mkdir -p "$ZIP_DIR"
     while true; do
         if curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"; then
-            unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR" &>/dev/null
+            unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
             rm "$ZIP_DIR/content.zip"
             log "Syncronite content downloaded and extracted to $ZIP_DIR"
             return 0
@@ -710,24 +710,4 @@ rm -rf "$WORK_DIR"
 log_and_show "ZeroNet installation completed successfully!"
 log_and_show "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
 
-log "Installation process completed. Please review the log file at $LOG_FILE for any important messages or errors."
-
-termux-notification --id "zeronet_complete" \
-    --title "ZeroNet Installed Successfully" \
-    --content "ZeroNet is running at http://$UI_IP:$UI_PORT. Add Syncronite: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS" \
-    --button1 "Copy ZeroNet URL" \
-    --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'" \
-    --button2 "Copy Syncronite URL" \
-    --button2-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS'" \
-    --ongoing
-
-# Final instructions
-echo ""
-echo "Important Instructions:"
-echo "1. To access ZeroNet, open this URL in your web browser: http://$UI_IP:$UI_PORT"
-echo "2. To add Syncronite, visit: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS"
-echo "3. If you set up auto-start, ZeroNet will start automatically after device reboot."
-echo "4. To manually start ZeroNet in the future, run:"
-echo "   cd $ZERONET_DIR && source venv/bin/activate && python zeronet.py"
-echo ""
-echo "Thank you for installing ZeroNet. Enjoy your decentralized web experience!"
+log "Installation process completed. Please review the log file at $LOG
