@@ -179,6 +179,7 @@ install_python_packages() {
     }
 
 install_package_with_fallbacks setuptools || return 1
+install_package_with_fallbacks greenlet || return 1
 install_package_with_fallbacks gevent || return 1
 install_package_with_fallbacks gevent-ws || return 1
 install_package_with_fallbacks PySocks || return 1
