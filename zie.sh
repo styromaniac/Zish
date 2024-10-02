@@ -187,6 +187,7 @@ install_package_with_fallbacks requests || return 1
 install_package_with_fallbacks GitPython || return 1
 install_package_with_fallbacks pycryptodome || return 1
 install_package_with_fallbacks cryptography || return 1
+install_package_with_fallbacks pyOpenSSL || return 1
 install_package_with_fallbacks coincurve || return 1
 install_package_with_fallbacks pyasn1 || return 1
 install_package_with_fallbacks rsa || return 1
