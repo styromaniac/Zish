@@ -89,6 +89,7 @@ required_packages=(
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
     clang make termux-api tor perl jq rust openssl-tool iproute2
+    openssl-dev zlib-dev
 )
 
 install_package() {
@@ -180,6 +181,7 @@ install_python_packages() {
 
 install_package_with_fallbacks setuptools || return 1
 install_package_with_fallbacks greenlet || return 1
+install_package_with_fallbacks cffi || return 1
 install_package_with_fallbacks gevent || return 1
 install_package_with_fallbacks gevent-ws || return 1
 install_package_with_fallbacks PySocks || return 1
