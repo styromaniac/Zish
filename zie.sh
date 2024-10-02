@@ -136,8 +136,8 @@ install_python_packages() {
 
     pip install --upgrade pip setuptools wheel
 
-    # Create a requirements.txt file
-    cat > "$WORK_DIR/requirements.txt" << EOL
+    # Create our own requirements.txt file
+    cat > "$WORK_DIR/custom_requirements.txt" << EOL
 setuptools
 greenlet
 cffi
@@ -162,11 +162,11 @@ pyaes
 ipython
 EOL
 
-    # Install packages from requirements.txt
-    if pip install -r "$WORK_DIR/requirements.txt"; then
+    # Install packages from our custom requirements.txt
+    if pip install -r "$WORK_DIR/custom_requirements.txt"; then
         log "Successfully installed required Python packages"
     else
-        log_error "Failed to install some Python packages from requirements.txt"
+        log_error "Failed to install some Python packages from custom_requirements.txt"
         return 1
     fi
 
@@ -174,8 +174,6 @@ EOL
     log "Verifying installations..."
     python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
-
-install_python_packages || exit 1
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
@@ -281,6 +279,12 @@ fi
 source "$ZERONET_DIR/venv/bin/activate"
 
 chmod -R u+rwX "$ZERONET_DIR"
+
+# Rename ZeroNet's original requirements.txt
+if [ -f "$ZERONET_DIR/requirements.txt" ]; then
+    mv "$ZERONET_DIR/requirements.txt" "$ZERONET_DIR/requirements.txt.original"
+    log "Renamed ZeroNet's original requirements.txt to requirements.txt.original"
+fi
 
 install_contentfilter_plugin() {
     log "Installing ContentFilter plugin..."
