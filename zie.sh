@@ -180,13 +180,13 @@ install_python_packages() {
 
 install_package_with_fallbacks setuptools || return 1
 install_package_with_fallbacks gevent || return 1
+install_package_with_fallbacks gevent-ws || return 1
 install_package_with_fallbacks PySocks || return 1
 install_package_with_fallbacks requests || return 1
-install_package_with_fallbacks gevent-ws || return 1
-install_package_with_fallbacks cryptography || return 1
-install_package_with_fallbacks pycryptodome || return 1
-install_package_with_fallbacks coincurve || return 1
 install_package_with_fallbacks GitPython || return 1
+install_package_with_fallbacks coincurve || return 1
+install_package_with_fallbacks pyasn1 || return 1
+install_package_with_fallbacks rsa || return 1
 install_package_with_fallbacks msgpack || return 1
 install_package_with_fallbacks base58 || return 1
 install_package_with_fallbacks merkletools || return 1
