@@ -310,14 +310,6 @@ source "$ZERONET_DIR/venv/bin/activate"
 
 chmod -R u+rwX "$ZERONET_DIR" &>/dev/null
 
-if [ -f requirements.txt ]; then
-    chmod 644 requirements.txt &>/dev/null
-    if ! pip install -r requirements.txt &>/dev/null; then
-        log_error "Failed to install from requirements.txt"
-        exit 1
-    fi
-fi
-
 install_contentfilter_plugin() {
     log "Installing ContentFilter plugin..."
     local plugins_dir="$ZERONET_DIR/plugins"
