@@ -164,31 +164,15 @@ EOL
 
     # Install packages from requirements.txt
     if pip install -r "$WORK_DIR/requirements.txt"; then
-        log "Successfully installed main Python packages"
+        log "Successfully installed required Python packages"
     else
         log_error "Failed to install some Python packages from requirements.txt"
         return 1
     fi
 
-    # Attempt to install pysha3 with specific version
-    log "Attempting to install pysha3..."
-    if pip install pysha3==1.0.2; then
-        log "Successfully installed pysha3"
-    else
-        log "Failed to install pysha3 via pip. Attempting to build from source..."
-        
-        # Attempt to install pysha3 from source
-        git clone https://github.com/tiran/pysha3.git
-        cd pysha3
-        python setup.py build
-        python setup.py install
-        cd ..
-        rm -rf pysha3
-    fi
-
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; import sha3; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 install_python_packages || exit 1
