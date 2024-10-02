@@ -88,8 +88,8 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq rust openssl-tool iproute2
-    openssl zlib-dev
+    clang make termux-api tor perl jq rust openssl iproute2
+    zlib
 )
 
 install_package() {
