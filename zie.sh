@@ -126,8 +126,13 @@ log "OpenSSL installation completed."
 
 install_python_packages() {
     log "Installing required Python packages..."
-    export CFLAGS="-I$PREFIX/include"
-    export LDFLAGS="-L$PREFIX/lib"
+    
+    # Ensure Python development headers are installed
+    pkg install python-dev
+
+    export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python3.11"
+    export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib/python3.11/config-3.11"
+    export PYTHONPATH="$PREFIX/lib/python3.11/site-packages"
 
     pip install --upgrade pip setuptools wheel
 
@@ -165,16 +170,14 @@ EOL
         return 1
     fi
 
-    # Attempt to install pysha3 with custom flags
-    log "Attempting to install pysha3..."
-    export CFLAGS="$CFLAGS -I$PREFIX/include/python3.11"
-    export LDFLAGS="$LDFLAGS -L$PREFIX/lib/python3.11/config-3.11"
-    if pip install --no-use-pep517 pysha3; then
-        log "Successfully installed pysha3"
-    else
-        log_error "Failed to install pysha3. This is a critical error."
-        return 1
-    fi
+    # Attempt to install pysha3 from source
+    log "Attempting to install pysha3 from source..."
+    git clone https://github.com/tiran/pysha3.git
+    cd pysha3
+    python setup.py build
+    python setup.py install
+    cd ..
+    rm -rf pysha3
 
     # Verify installations
     log "Verifying installations..."
