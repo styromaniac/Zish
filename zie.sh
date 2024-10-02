@@ -131,79 +131,43 @@ install_python_packages() {
 
     pip install --upgrade pip setuptools wheel
 
-    MAX_RETRIES=3
-    RETRY_DELAY=10
+    # Create a requirements.txt file
+    cat > "$WORK_DIR/requirements.txt" << EOL
+setuptools
+greenlet
+cffi
+gevent
+gevent-ws
+PySocks
+requests
+GitPython
+pycryptodome
+cryptography
+pyOpenSSL
+coincurve
+pyasn1
+rsa
+msgpack
+base58
+merkletools
+maxminddb
+rich
+defusedxml
+pyaes
+ipython
+EOL
 
-    install_package_with_retry() {
-        local package=$1
-        local retries=0
-        while [ $retries -lt $MAX_RETRIES ]; do
-            if pip install --no-deps $package; then
-                log "Successfully installed $package"
-                return 0
-            else
-                retries=$((retries + 1))
-                log "Failed to install $package. Attempt $retries of $MAX_RETRIES."
-                if [ $retries -lt $MAX_RETRIES ]; then
-                    log "Retrying in $RETRY_DELAY seconds..."
-                    sleep $RETRY_DELAY
-                    # Kill any hanging processes
-                    pkill -f "pip install"
-                    # Clean up temporary directories
-                    rm -rf "$HOME/.cache/pip"
-                fi
-            fi
-        done
-        log_error "Failed to install $package after $MAX_RETRIES attempts."
+    # Install packages from requirements.txt
+    if pip install -r "$WORK_DIR/requirements.txt"; then
+        log "Successfully installed all required Python packages"
+    else
+        log_error "Failed to install required Python packages"
         return 1
-    }
+    fi
 
-    # Try different installation methods
-    install_package_with_fallbacks() {
-        local package=$1
-        if ! install_package_with_retry $package; then
-            log "Attempting to install $package with binary distribution..."
-            if ! pip install --only-binary=:all: $package; then
-                if [ "$package" = "cryptography" ]; then
-                    log "Attempting to install cryptography without Rust..."
-                    if ! CRYPTOGRAPHY_DONT_BUILD_RUST=1 pip install cryptography; then
-                        log_error "All installation methods failed for $package"
-                        return 1
-                    fi
-                else
-                    log_error "All installation methods failed for $package"
-                    return 1
-                fi
-            fi
-        fi
-        return 0
-    }
-
-install_package_with_fallbacks setuptools || return 1
-install_package_with_fallbacks greenlet || return 1
-install_package_with_fallbacks cffi || return 1
-install_package_with_fallbacks gevent || return 1
-install_package_with_fallbacks gevent-ws || return 1
-install_package_with_fallbacks PySocks || return 1
-install_package_with_fallbacks requests || return 1
-install_package_with_fallbacks GitPython || return 1
-install_package_with_fallbacks pycryptodome || return 1
-install_package_with_fallbacks cryptography || return 1
-install_package_with_fallbacks pyOpenSSL || return 1
-install_package_with_fallbacks coincurve || return 1
-install_package_with_fallbacks pyasn1 || return 1
-install_package_with_fallbacks rsa || return 1
-install_package_with_fallbacks msgpack || return 1
-install_package_with_fallbacks base58 || return 1
-install_package_with_fallbacks merkletools || return 1
-install_package_with_fallbacks maxminddb || return 1
-install_package_with_fallbacks rich || return 1
-install_package_with_fallbacks defusedxml || return 1
-install_package_with_fallbacks pyaes || return 1
-install_package_with_fallbacks ipython || return 1
-
+    # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 install_python_packages || exit 1
@@ -716,4 +680,4 @@ rm -rf "$WORK_DIR"
 log_and_show "ZeroNet installation completed successfully!"
 log_and_show "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
 
-log "Installation process completed. Please review the log file at $LOG
+log "Installation process completed. Please review the log file at $LOG_FILE for details."
