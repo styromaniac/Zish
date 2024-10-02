@@ -169,51 +169,26 @@ EOL
         return 1
     fi
 
-    # Check if 'rich' is imported in any of the Python files
-    if grep -r "from rich import" "$ZERONET_DIR" || grep -r "import rich" "$ZERONET_DIR"; then
-        log "Detected 'rich' module usage. Installing 'rich'..."
-        if pip install rich; then
-            log "Successfully installed 'rich' module"
-        else
-            log "Failed to install 'rich' module. Creating a dummy 'rich' module..."
-            create_dummy_rich
-        fi
-    else
-        log "No 'rich' module usage detected. Skipping 'rich' installation."
-    fi
-
     # Verify installations
     log "Verifying installations..."
     python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
-}
-
-create_dummy_rich() {
-    log "Creating dummy rich module..."
-    cat > "$ZERONET_DIR/rich.py" << EOL
-class Console:
-    def print(*args, **kwargs):
-        print(*args, **kwargs)
-
-def print(*args, **kwargs):
-    __builtins__['print'](*args, **kwargs)
-EOL
-    log "Dummy rich module created at $ZERONET_DIR/rich.py"
 }
 
 modify_zeronet_source() {
     local greet_file="$ZERONET_DIR/greet.py"
     if [ -f "$greet_file" ]; then
         log "Modifying $greet_file to handle missing 'rich' module..."
-        sed -i '1ifancy_greet_disabled = False\ntry:\n    from rich.console import Console\nexcept ImportError:\n    fancy_greet_disabled = True\n    print("Warning: rich module not available, using basic output")' "$greet_file"
-        sed -i 's/def fancy_greet(/def fancy_greet_original(/g' "$greet_file"
-        cat >> "$greet_file" << EOL
-
-def fancy_greet(version):
-    if fancy_greet_disabled:
-        print(f"ZeroNet version: {version}")
-    else:
-        fancy_greet_original(version)
-EOL
+        sed -i '1s/^/import sys\n/' "$greet_file"
+        sed -i '/from rich\.console import Console/i\
+try:\n\
+    from rich.console import Console\n\
+except ImportError:\n\
+    print("Warning: rich module not available, using basic output")\n\
+    class Console:\n\
+        def print(*args, **kwargs):\n\
+            print(*args, file=sys.stderr, **kwargs)\n\
+' "$greet_file"
+        sed -i 's/^from rich\.console import Console/# &/' "$greet_file"
         log "Modified $greet_file successfully"
     else
         log "Warning: $greet_file not found, skipping modification"
@@ -669,6 +644,10 @@ download_geoip_database() {
 download_geoip_database
 
 check_openssl
+
+# Modify ZeroNet source to handle missing 'rich' module
+modify_zeronet_source
+
 log "Starting ZeroNet..."
 start_zeronet
 
