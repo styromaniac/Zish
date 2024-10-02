@@ -159,15 +159,26 @@ EOL
 
     # Install packages from requirements.txt
     if pip install -r "$WORK_DIR/requirements.txt"; then
-        log "Successfully installed all required Python packages"
+        log "Successfully installed main Python packages"
     else
-        log_error "Failed to install required Python packages"
+        log_error "Failed to install some Python packages from requirements.txt"
+        return 1
+    fi
+
+    # Attempt to install pysha3 with custom flags
+    log "Attempting to install pysha3..."
+    export CFLAGS="$CFLAGS -I$PREFIX/include/python3.11"
+    export LDFLAGS="$LDFLAGS -L$PREFIX/lib/python3.11/config-3.11"
+    if pip install --no-use-pep517 pysha3; then
+        log "Successfully installed pysha3"
+    else
+        log_error "Failed to install pysha3. This is a critical error."
         return 1
     fi
 
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; import sha3; print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 install_python_packages || exit 1
