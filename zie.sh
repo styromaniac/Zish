@@ -164,15 +164,24 @@ EOL
 
     # Install packages from our custom requirements.txt
     if pip install -r "$WORK_DIR/custom_requirements.txt"; then
-        log "Successfully installed required Python packages"
+        log "Successfully installed main Python packages"
     else
         log_error "Failed to install some Python packages from custom_requirements.txt"
         return 1
     fi
 
+    # Explicitly install rich
+    log "Explicitly installing rich package..."
+    if pip install rich; then
+        log "Successfully installed rich package"
+    else
+        log_error "Failed to install rich package"
+        return 1
+    fi
+
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; from rich.console import Console; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
