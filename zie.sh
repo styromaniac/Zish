@@ -127,8 +127,8 @@ log "OpenSSL installation completed."
 install_python_packages() {
     log "Installing required Python packages..."
     
-    # Ensure Python development headers are installed
-    pkg install python-dev
+    # Ensure Python is up to date
+    pkg upgrade python
 
     export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python3.11"
     export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib/python3.11/config-3.11"
@@ -170,14 +170,21 @@ EOL
         return 1
     fi
 
-    # Attempt to install pysha3 from source
-    log "Attempting to install pysha3 from source..."
-    git clone https://github.com/tiran/pysha3.git
-    cd pysha3
-    python setup.py build
-    python setup.py install
-    cd ..
-    rm -rf pysha3
+    # Attempt to install pysha3 with specific version
+    log "Attempting to install pysha3..."
+    if pip install pysha3==1.0.2; then
+        log "Successfully installed pysha3"
+    else
+        log "Failed to install pysha3 via pip. Attempting to build from source..."
+        
+        # Attempt to install pysha3 from source
+        git clone https://github.com/tiran/pysha3.git
+        cd pysha3
+        python setup.py build
+        python setup.py install
+        cd ..
+        rm -rf pysha3
+    fi
 
     # Verify installations
     log "Verifying installations..."
