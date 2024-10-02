@@ -156,7 +156,6 @@ msgpack
 base58
 merkletools
 maxminddb
-rich
 defusedxml
 pyaes
 ipython
@@ -164,24 +163,15 @@ EOL
 
     # Install packages from our custom requirements.txt
     if pip install -r "$WORK_DIR/custom_requirements.txt"; then
-        log "Successfully installed main Python packages"
+        log "Successfully installed required Python packages"
     else
         log_error "Failed to install some Python packages from custom_requirements.txt"
         return 1
     fi
 
-    # Explicitly install rich
-    log "Explicitly installing rich package..."
-    if pip install rich; then
-        log "Successfully installed rich package"
-    else
-        log_error "Failed to install rich package"
-        return 1
-    fi
-
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import rich; from rich.console import Console; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
@@ -447,6 +437,14 @@ EOL
     log "Tor configuration created at $TORRC_FILE"
 }
 
+remove_rich_imports() {
+    log "Removing rich library imports from ZeroNet source code..."
+    find "$ZERONET_DIR" -type f -name "*.py" -print0 | xargs -0 sed -i 's/from rich import print/# rich import removed/g'
+    find "$ZERONET_DIR" -type f -name "*.py" -print0 | xargs -0 sed -i 's/import rich/# rich import removed/g'
+    find "$ZERONET_DIR" -type f -name "*.py" -print0 | xargs -0 sed -i 's/from rich import \*/# rich import removed/g'
+    log "Finished removing rich library imports."
+}
+
 update_trackers
 generate_random_port
 create_zeronet_conf
@@ -523,7 +521,7 @@ start_tor() {
 start_zeronet() {
     cd "/data/data/com.termux/files/home/apps/zeronet"
     . ./venv/bin/activate
-    python3 zeronet.py &
+    python zeronet.py &
 
     ZERONET_PID=$!
     echo "ZeroNet started"
@@ -555,15 +553,18 @@ check_openssl() {
 
 start_zeronet() {
     cd $ZERONET_DIR
-    . ./venv/bin/activate
+    source ./venv/bin/activate
 
     # Add Termux bin to PATH
     export PATH=$PATH:$PREFIX/bin
 
+    # Remove rich imports
+    remove_rich_imports
+
     # Check for existing ZeroNet processes
-    if pgrep -f "python3.*zeronet.py" > /dev/null; then
+    if pgrep -f "python.*zeronet.py" > /dev/null; then
         log "Existing ZeroNet process found. Terminating..."
-        pkill -f "python3.*zeronet.py"
+        pkill -f "python.*zeronet.py"
         sleep 5  # Wait for the process to terminate
     fi
 
@@ -589,7 +590,7 @@ start_zeronet() {
     sleep 2
 
     # Start ZeroNet with the updated PATH
-    python3 zeronet.py &
+    python zeronet.py &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
