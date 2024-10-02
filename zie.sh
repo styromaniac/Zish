@@ -438,14 +438,30 @@ EOL
 }
 
 create_dummy_rich() {
-    log "Creating dummy rich.py file..."
-    local rich_file="$ZERONET_DIR/src/rich.py"
-    mkdir -p "$(dirname "$rich_file")"
-    cat > "$rich_file" << EOL
+    log "Creating dummy rich.py files..."
+    possible_paths=(
+        "$ZERONET_DIR/src"
+        "$ZERONET_DIR"
+        "$ZERONET_DIR/lib"
+        "$ZERONET_DIR/plugins"
+        "$ZERONET_DIR/venv/lib/python3.11/site-packages"
+    )
+
+    for path in "${possible_paths[@]}"; do
+        local rich_file="$path/rich.py"
+        mkdir -p "$(dirname "$rich_file")"
+        cat > "$rich_file" << EOL
 def print(*args, **kwargs):
     __builtins__['print'](*args, **kwargs)
+
+class Console:
+    def print(*args, **kwargs):
+        __builtins__['print'](*args, **kwargs)
 EOL
-    log "Dummy rich.py file created at $rich_file"
+        log "Dummy rich.py file created at $rich_file"
+    done
+
+    log "Dummy rich.py files created in multiple possible locations"
 }
 
 update_trackers
@@ -561,7 +577,7 @@ start_zeronet() {
     # Add Termux bin to PATH
     export PATH=$PATH:$PREFIX/bin
 
-    # Create dummy rich.py
+    # Create dummy rich.py files
     create_dummy_rich
 
     # Check for existing ZeroNet processes
@@ -592,8 +608,8 @@ start_zeronet() {
     # Add a small delay before starting ZeroNet
     sleep 2
 
-    # Start ZeroNet with the updated PATH
-    python zeronet.py &
+    # Start ZeroNet with the updated PATH and debug output
+    python -v zeronet.py > zeronet_debug.log 2>&1 &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
@@ -603,6 +619,8 @@ start_zeronet() {
     sleep 5
     if ! ps -p $ZERONET_PID > /dev/null; then
         log_error "ZeroNet process terminated unexpectedly. Check logs for details."
+        log "Debug log contents:"
+        cat zeronet_debug.log
         exit 1
     fi
 }
