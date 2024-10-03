@@ -147,7 +147,7 @@ PySocks
 requests
 GitPython
 pycryptodome
-pyOpenSSL
+pyOpenSSL-python3
 coincurve
 pyasn1
 rsa
@@ -160,9 +160,18 @@ pyaes
 ipython
 EOL
 
-    # Install packages from our custom requirements.txt
-    if pip install -r "$WORK_DIR/custom_requirements.txt"; then
-        log "Successfully installed required Python packages"
+    log "Installing Python packages individually..."
+    while read -r package; do
+        if pip install "$package"; then
+            log "Successfully installed $package"
+        else
+            log_error "Failed to install $package"
+            return 1
+        fi
+    done < "$WORK_DIR/custom_requirements.txt"
+
+    if [ $? -eq 0 ]; then
+        log "Successfully installed all required Python packages"
     else
         log_error "Failed to install some Python packages from custom_requirements.txt"
         return 1
