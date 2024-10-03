@@ -54,9 +54,6 @@ log "Detected Python version: $PYTHON_VERSION"
 
 echo "ZeroNet installation: Step 3 of 4 - Gathering information"
 
-echo "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
-read -r zeronet_source
-
 echo "Please provide a URL or path to users.json, or press Enter to skip. users.json is where your ZeroNet accounts are stored and/or will be stored."
 read -r users_json_source
 
@@ -198,30 +195,14 @@ mkdir -p "$ZERONET_DIR"
 
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 
-download_with_retries() {
-    local url=$1
-    local output_file=$2
-
-    while true; do
-        log "Attempting to download $url..."
-        if curl -s -f -L "$url" -o "$output_file"; then
-            log "Successfully downloaded $url"
-            break
-        else
-            log "Failed to download $url. Retrying in 5 seconds..."
-            rm -f "$output_file"
-            sleep 5
-        fi
-    done
-}
-
 git_clone_with_retries() {
     local repo_url=$1
     local target_dir=$2
+    local branch=$3
 
     while true; do
         log "Attempting to clone $repo_url..."
-        if git clone "$repo_url" "$target_dir"; then
+        if git clone --depth 1 --branch "$branch" "$repo_url" "$target_dir"; then
             log "Successfully cloned $repo_url"
             break
         else
@@ -232,63 +213,25 @@ git_clone_with_retries() {
     done
 }
 
-if [[ "$zeronet_source" == http*".git" ]]; then
-    git_clone_with_retries "$zeronet_source" "zeronet_repo"
-    base_dir="$WORK_DIR/zeronet_repo"
-elif [[ "$zeronet_source" == http*".zip" ]] || [[ "$zeronet_source" == http*".tar.gz" ]]; then
-    download_with_retries "$zeronet_source" "zeronet_archive"
-    if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip $zeronet_source"; exit 1; }
-    elif [[ "$zeronet_source" == *.tar.gz ]]; then
-        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract $zeronet_source"; exit 1; }
-    fi
-    rm zeronet_archive
-    zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
-    if [ -z "$zeronet_py_path" ]; then
-        log_error "zeronet.py not found after extraction."
-        exit 1
-    fi
-    base_dir=$(dirname "$zeronet_py_path")
-elif [ -f "$zeronet_source" ]; then
-    cp "$zeronet_source" zeronet_archive
-    if [[ "$zeronet_source" == *.zip ]]; then
-        unzip -o zeronet_archive -d "$WORK_DIR" || { log_error "Failed to unzip local file $zeronet_source"; exit 1; }
-    elif [[ "$zeronet_source" == *.tar.gz ]]; then
-        tar -xzf zeronet_archive -C "$WORK_DIR" || { log_error "Failed to extract local file $zeronet_source"; exit 1; }
-    else
-        log_error "Unsupported file format. Please provide a .zip or .tar.gz file."
-        exit 1
-    fi
-    rm zeronet_archive
-    zeronet_py_path=$(find "$WORK_DIR" -type f -name 'zeronet.py' | head -n 1)
-    if [ -z "$zeronet_py_path" ]; then
-        log_error "zeronet.py not found after extraction."
-        exit 1
-    fi
-    base_dir=$(dirname "$zeronet_py_path")
-else
-    log_error "Invalid input. Please provide a valid Git URL, ZIP URL, or file path."
-    exit 1
-fi
-
-log "Adjusting ownership of files before moving..."
-chmod -R u+rwX "$base_dir" || { log_error "Failed to adjust permissions on extracted files"; exit 1; }
-
-log "Moving extracted files to $ZERONET_DIR..."
-mv "$base_dir"/* "$ZERONET_DIR"/ || { log_error "Failed to move extracted files"; exit 1; }
-
-if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
-    log_error "zeronet.py not found in the expected directory."
-    exit 1
-fi
+zeronet_source="https://github.com/zeronet-conservancy/zeronet-conservancy.git"
+git_clone_with_retries "$zeronet_source" "$ZERONET_DIR" "optional-rich-master"
 
 cd "$ZERONET_DIR" || exit 1
+
+sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
+
+if [ ! -f "$ZERONET_DIR/src/Build.py" ]; then
+    log_error "Build.py not found. ZeroNet installation might be incomplete."
+    exit 1
+fi
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
     python$PYTHON_MAJOR_VERSION -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
+
+pip install -r "$ZERONET_DIR/requirements.txt"
 
 chmod -R u+rwX "$ZERONET_DIR"
 
@@ -302,7 +245,7 @@ install_contentfilter_plugin() {
     local plugins_tmp_dir="$WORK_DIR/zeronet_plugins"
 
     if [ ! -d "$plugins_dir/ContentFilter" ]; then
-        git_clone_with_retries "$plugins_repo" "$plugins_tmp_dir"
+        git_clone_with_retries "$plugins_repo" "$plugins_tmp_dir" "master"
 
         if [ -d "$plugins_tmp_dir/ContentFilter" ]; then
             mv "$plugins_tmp_dir/ContentFilter" "$plugins_dir/ContentFilter"
@@ -328,7 +271,7 @@ chmod -R u+rwX ./data
 
 if [[ "$users_json_source" == http* ]]; then
     mkdir -p data
-    download_with_retries "$users_json_source" "data/users.json"
+    curl -L "$users_json_source" -o "data/users.json"
 elif [ -n "$users_json_source" ]; then
     if [ -f "$users_json_source" ]; then
         mkdir -p data
