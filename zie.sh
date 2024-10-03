@@ -1,7 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-set -e
-
 termux-wake-lock
 
 echo "ZeroNet installation: Step 1 of 4 - Updating Termux repositories"
@@ -149,7 +147,6 @@ PySocks
 requests
 GitPython
 pycryptodome
-cryptography
 pyOpenSSL
 coincurve
 pyasn1
@@ -173,7 +170,7 @@ EOL
 
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; from Crypto.Hash import SHA3_256; import cryptography; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python3 -c "import gevent; from Crypto.Hash import SHA3_256; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
