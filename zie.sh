@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+set -e
+
 termux-wake-lock
 
 echo "ZeroNet installation: Step 1 of 4 - Updating Termux repositories"
@@ -88,7 +90,7 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq rust openssl iproute2
+    clang make termux-api tor perl jq openssl iproute2
     zlib
 )
 
