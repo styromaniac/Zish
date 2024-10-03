@@ -88,7 +88,7 @@ required_packages=(
     termux-tools termux-keyring python
     netcat-openbsd binutils git cmake libffi
     curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq openssl iproute2
+    clang make termux-api tor perl jq openssl-tool iproute2
     zlib
 )
 
@@ -147,7 +147,7 @@ PySocks
 requests
 GitPython
 pycryptodome
-pyOpenSSL-python3
+pyOpenSSL
 coincurve
 pyasn1
 rsa
