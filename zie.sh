@@ -42,6 +42,16 @@ log_error() {
     exit 1
 }
 
+get_python_version() {
+    python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+}
+
+PYTHON_VERSION=$(get_python_version)
+PYTHON_MAJOR_VERSION=${PYTHON_VERSION%.*}
+PYTHON_MINOR_VERSION=${PYTHON_VERSION#*.}
+
+log "Detected Python version: $PYTHON_VERSION"
+
 echo "ZeroNet installation: Step 3 of 4 - Gathering information"
 
 echo "Please provide the Git clone URL or path to the ZeroNet source code archive (Git URL, .zip, or .tar.gz):"
@@ -119,22 +129,17 @@ for package in "${required_packages[@]}"; do
     fi
 done
 
-log "Installing OpenSSL from Termux repository..."
-yes | pkg install -y openssl-tool || log_error "Failed to install OpenSSL from repository"
-
-log "OpenSSL installation completed."
-
 install_python_packages() {
     log "Installing required Python packages..."
     
     # Ensure Python is up to date
     pkg upgrade python
 
-    export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python3.11"
-    export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib/python3.11/config-3.11"
-    export PYTHONPATH="$PREFIX/lib/python3.11/site-packages"
+    export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python$PYTHON_VERSION"
+    export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib/python$PYTHON_VERSION/config-$PYTHON_VERSION"
+    export PYTHONPATH="$PREFIX/lib/python$PYTHON_VERSION/site-packages"
 
-    pip install --upgrade pip setuptools wheel
+    pip$PYTHON_MAJOR_VERSION install --upgrade pip setuptools wheel
 
     # Create our own requirements.txt file
     cat > "$WORK_DIR/custom_requirements.txt" << EOL
@@ -162,7 +167,7 @@ EOL
 
     log "Installing Python packages individually..."
     while read -r package; do
-        if pip install "$package"; then
+        if pip$PYTHON_MAJOR_VERSION install "$package"; then
             log "Successfully installed $package"
         else
             log_error "Failed to install $package"
@@ -179,7 +184,7 @@ EOL
 
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; from Crypto.Hash import SHA3_256; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+    python$PYTHON_MAJOR_VERSION -c "import gevent; from Crypto.Hash import SHA3_256; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
@@ -280,7 +285,7 @@ fi
 cd "$ZERONET_DIR" || exit 1
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python3 -m venv "$ZERONET_DIR/venv"
+    python$PYTHON_MAJOR_VERSION -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
@@ -584,7 +589,7 @@ start_zeronet() {
     sleep 2
 
     # Start ZeroNet with the updated PATH and debug output
-    python zeronet.py > zeronet_debug.log 2>&1 &
+    python$PYTHON_MAJOR_VERSION zeronet.py > zeronet_debug.log 2>&1 &
     ZERONET_PID=$!
     log "ZeroNet started with PID $ZERONET_PID"
     termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
