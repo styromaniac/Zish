@@ -171,27 +171,7 @@ EOL
 
     # Verify installations
     log "Verifying installations..."
-    python3 -c "import gevent; import Crypto; import cryptography; import OpenSSL; import hashlib; print('SHA3-256:', hashlib.sha3_256(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
-}
-
-modify_zeronet_source() {
-    local greet_file="$ZERONET_DIR/greet.py"
-    if [ -f "$greet_file" ] && grep -q 'from rich.console import Console' "$greet_file"; then
-        log "Modifying $greet_file to handle missing 'rich' module..."
-        sed -i '1s/^/import sys\n/' "$greet_file"
-        sed -i '/from rich\.console import Console/i\
-try:\n\
-    from rich.console import Console\n\
-except ImportError:\n\
-    print("Warning: rich module not available, using basic output")\n\
-    class Console:\n\
-        def print(*args, **kwargs):\n\
-            print(*args, file=sys.stderr, **kwargs)\n\
-' "$greet_file"
-        log "Modified $greet_file successfully"
-    else
-        log "No 'rich' import found in $greet_file. Skipping modification."
-    fi
+    python3 -c "import gevent; from Crypto.Hash import SHA3_256; import cryptography; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
@@ -299,17 +279,8 @@ source "$ZERONET_DIR/venv/bin/activate"
 
 chmod -R u+rwX "$ZERONET_DIR"
 
-# Rename ZeroNet's original requirements.txt
-if [ -f "$ZERONET_DIR/requirements.txt" ]; then
-    mv "$ZERONET_DIR/requirements.txt" "$ZERONET_DIR/requirements.txt.original"
-    log "Renamed ZeroNet's original requirements.txt to requirements.txt.original"
-fi
-
 # Install Python packages
 install_python_packages
-
-# Modify ZeroNet source to handle missing 'rich' module
-modify_zeronet_source
 
 install_contentfilter_plugin() {
     log "Installing ContentFilter plugin..."
