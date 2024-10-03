@@ -218,11 +218,23 @@ git_clone_with_retries "$zeronet_source" "$ZERONET_DIR" "optional-rich-master"
 
 cd "$ZERONET_DIR" || exit 1
 
-sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
-
-if [ ! -f "$ZERONET_DIR/src/Build.py" ]; then
-    log_error "Build.py not found. ZeroNet installation might be incomplete."
+# Check for key files
+if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
+    log_error "zeronet.py not found. ZeroNet installation might be incomplete."
     exit 1
+fi
+
+# Check if src directory exists
+if [ -d "$ZERONET_DIR/src" ]; then
+    sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
+else
+    log "src directory not found. Checking alternative structure..."
+    if [ -f "$ZERONET_DIR/util/Git.py" ]; then
+        sed -i '1i import traceback' "$ZERONET_DIR/util/Git.py"
+    else
+        log_error "Unable to locate Git.py. ZeroNet structure might have changed."
+        exit 1
+    fi
 fi
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
@@ -231,12 +243,16 @@ fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
-pip install -r "$ZERONET_DIR/requirements.txt"
+# Check if requirements.txt exists
+if [ -f "$ZERONET_DIR/requirements.txt" ]; then
+    pip install -r "$ZERONET_DIR/requirements.txt"
+else
+    log "requirements.txt not found. Installing packages from custom list..."
+    # Install packages from our custom list
+    install_python_packages
+fi
 
 chmod -R u+rwX "$ZERONET_DIR"
-
-# Install Python packages
-install_python_packages
 
 install_contentfilter_plugin() {
     log "Installing ContentFilter plugin..."
