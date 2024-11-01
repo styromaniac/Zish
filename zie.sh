@@ -214,7 +214,7 @@ git_clone_with_retries() {
 }
 
 zeronet_source="https://github.com/zeronet-conservancy/zeronet-conservancy.git"
-git_clone_with_retries "$zeronet_source" "$ZERONET_DIR" "optional-rich-master"
+git_clone_with_retries "$zeronet_source" "$ZERONET_DIR" "optional-rich"
 
 cd "$ZERONET_DIR" || exit 1
 
