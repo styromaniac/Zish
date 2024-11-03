@@ -17,8 +17,6 @@ LOG_FILE="$HOME/zeronet_install.log"
 TORRC_FILE="$HOME/.tor/torrc"
 TOR_PROXY_PORT=49050
 TOR_CONTROL_PORT=49051
-UI_IP="127.0.0.1"
-UI_PORT=43110
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
@@ -220,195 +218,115 @@ cd "$ZERONET_DIR" || exit 1
 
 # Check for key files
 if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
-    log_error "zeronet.py not found. ZeroNet installation might be incomplete."
-    exit 1
+   log_error "zeronet.py not found. ZeroNet installation might be incomplete."
+   exit 1
 fi
 
 # Check if src directory exists
 if [ -d "$ZERONET_DIR/src" ]; then
-    sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
+   sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
 else
-    log "src directory not found. Checking alternative structure..."
-    if [ -f "$ZERONET_DIR/util/Git.py" ]; then
-        sed -i '1i import traceback' "$ZERONET_DIR/util/Git.py"
-    else
-        log_error "Unable to locate Git.py. ZeroNet structure might have changed."
-        exit 1
-    fi
+   log "src directory not found. Checking alternative structure..."
+   if [ -f "$ZERONET_DIR/util/Git.py" ]; then
+       sed -i '1i import traceback' "$ZERONET_DIR/util/Git.py"
+   else
+       log_error "Unable to locate Git.py. ZeroNet structure might have changed."
+       exit 1
+   fi
 fi
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-    python$PYTHON_MAJOR_VERSION -m venv "$ZERONET_DIR/venv"
+   python$PYTHON_MAJOR_VERSION -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
 # Check if requirements.txt exists
 if [ -f "$ZERONET_DIR/requirements.txt" ]; then
-    pip install -r "$ZERONET_DIR/requirements.txt"
+   pip install -r "$ZERONET_DIR/requirements.txt"
 else
-    log "requirements.txt not found. Installing packages from custom list..."
-    # Install packages from our custom list
-    install_python_packages
+   log "requirements.txt not found. Installing packages from custom list..."
+   # Install packages from our custom list
+   install_python_packages
 fi
 
 chmod -R u+rwX "$ZERONET_DIR"
-
-install_contentfilter_plugin() {
-    log "Installing ContentFilter plugin..."
-    local plugins_dir="$ZERONET_DIR/plugins"
-    local plugins_repo="https://github.com/ZeroNetX/ZeroNet-Plugins.git"
-    local plugins_tmp_dir="$WORK_DIR/zeronet_plugins"
-
-    if [ ! -d "$plugins_dir/ContentFilter" ]; then
-        git_clone_with_retries "$plugins_repo" "$plugins_tmp_dir" "master"
-
-        if [ -d "$plugins_tmp_dir/ContentFilter" ]; then
-            mv "$plugins_tmp_dir/ContentFilter" "$plugins_dir/ContentFilter"
-            log "Installed ContentFilter plugin"
-        else
-            log "ContentFilter plugin not found in the repository"
-        fi
-
-        # Clean up
-        rm -rf "$plugins_tmp_dir"
-    else
-        log "ContentFilter plugin already exists, skipping installation"
-    fi
-
-    log "ContentFilter plugin installation completed."
-}
-
-# Install ContentFilter plugin
-install_contentfilter_plugin
 
 mkdir -p ./data
 chmod -R u+rwX ./data
 
 if [[ "$users_json_source" == http* ]]; then
-    mkdir -p data
-    curl -L "$users_json_source" -o "data/users.json"
+   mkdir -p data
+   curl -L "$users_json_source" -o "data/users.json"
 elif [ -n "$users_json_source" ]; then
-    if [ -f "$users_json_source" ]; then
-        mkdir -p data
-        cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
-        log "users.json copied successfully from $users_json_source"
-    else
-        log_error "File not found: $users_json_source"
-        exit 1
-    fi
+   if [ -f "$users_json_source" ]; then
+       mkdir -p data
+       cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
+       log "users.json copied successfully from $users_json_source"
+   else
+       log_error "File not found: $users_json_source"
+       exit 1
+   fi
 fi
 
 mkdir -p $PREFIX/var/log/
 
-TRACKERS_FILE="$ZERONET_DIR/trackers.txt"
-
-update_trackers() {
-    log "Updating trackers list..."
-    trackers_urls=(
-        "https://cf.trackerslist.com/best.txt"
-        "https://bitbucket.org/xiu2/trackerslistcollection/raw/master/best.txt"
-        "https://cdn.jsdelivr.net/gh/XIU2/TrackersListCollection/best.txt"
-        "https://fastly.jsdelivr.net/gh/XIU2/TrackersListCollection/best.txt"
-        "https://gcore.jsdelivr.net/gh/XIU2/TrackersListCollection/best.txt"
-        "https://cdn.statically.io/gh/XIU2/TrackersListCollection/best.txt"
-        "https://raw.githubusercontent.com/XIU2/TrackersListCollection/master/best.txt"
-    )
-
-    for tracker_url in "${trackers_urls[@]}"; do
-        log "Attempting to download tracker list from $tracker_url..."
-        if curl -A "$USER_AGENT" -s -f "$tracker_url" -o "$TRACKERS_FILE"; then
-            log "Successfully downloaded tracker list from $tracker_url"
-            chmod 644 "$TRACKERS_FILE"
-            return
-        else
-            log "Failed to download from $tracker_url."
-        fi
-    done
-    log_error "Failed to download from any URL. Retrying in 5 seconds..."
-    sleep 5
-}
-
 generate_random_port() {
-    log "Generating a random, collision-free port number for ZeroNet..."
+   log "Generating a random, collision-free port number for ZeroNet..."
 
-    EXCLUDED_PORTS=($TOR_PROXY_PORT $TOR_CONTROL_PORT)
+   EXCLUDED_PORTS=($TOR_PROXY_PORT $TOR_CONTROL_PORT)
 
-    while true; do
-        RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
-        
-        # Check if the port is in the excluded list
-        if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
-            log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
-            continue
-        fi
-        
-        # Check if the port is already in use
-        if ! ss -tuln | grep -q ":$RANDOM_PORT "; then
-            log "Selected available port $RANDOM_PORT for ZeroNet."
-            FILESERVER_PORT=$RANDOM_PORT
-            log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
-            break
-        else
-            log "Port $RANDOM_PORT is in use. Generating a new port..."
-        fi
-    done
-}
-
-create_zeronet_conf() {
-    local conf_file="$ZERONET_DIR/zeronet.conf"
-
-    cat > "$conf_file" << EOL
-[global]
-homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
-data_dir = $ZERONET_DIR/data
-log_dir = $PREFIX/var/log/zeronet
-ui_ip = $UI_IP
-ui_port = $UI_PORT
-tor_controller = $UI_IP:$TOR_CONTROL_PORT
-tor_proxy = $UI_IP:$TOR_PROXY_PORT
-trackers_file = $TRACKERS_FILE
- {data_dir}/$SYNCRONITE_ADDRESS/cache/1/Syncronite.html
-language = en
-tor = enable
-fileserver_port = $FILESERVER_PORT
-ip_external =
-EOL
-    log "ZeroNet configuration file created at $conf_file with security settings"
+   while true; do
+       RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
+       
+       # Check if the port is in the excluded list
+       if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
+           log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
+           continue
+       fi
+       
+       # Check if the port is already in use
+       if ! ss -tuln | grep -q ":$RANDOM_PORT "; then
+           log "Selected available port $RANDOM_PORT for ZeroNet."
+           FILESERVER_PORT=$RANDOM_PORT
+           log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
+           break
+       else
+           log "Port $RANDOM_PORT is in use. Generating a new port..."
+       fi
+   done
 }
 
 configure_tor() {
-    log "Configuring Tor..."
-    mkdir -p $HOME/.tor
-    mkdir -p $PREFIX/var/log/tor
+   log "Configuring Tor..."
+   mkdir -p $HOME/.tor
+   mkdir -p $PREFIX/var/log/tor
 
-    # Mandatory configuration
-    cat > $TORRC_FILE << EOL
+   # Mandatory configuration
+   cat > $TORRC_FILE << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
 Log notice file $PREFIX/var/log/tor/notices.log
 EOL
 
-    # Optional onion service configuration
-    if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
-        mkdir -p $HOME/.tor/ZeroNet
-        cat >> $TORRC_FILE << EOL
+   # Optional onion service configuration
+   if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
+       mkdir -p $HOME/.tor/ZeroNet
+       cat >> $TORRC_FILE << EOL
 HiddenServiceDir $HOME/.tor/ZeroNet
 HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
 EOL
-        log "Onion tracker configuration added to Tor configuration"
-    else
-        log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
-    fi
+       log "Onion tracker configuration added to Tor configuration"
+   else
+       log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
+   fi
 
-    log "Tor configuration created at $TORRC_FILE"
+   log "Tor configuration created at $TORRC_FILE"
 }
 
-update_trackers
 generate_random_port
-create_zeronet_conf
 configure_tor
 
 log "Starting Tor service..."
@@ -416,52 +334,50 @@ tor -f $TORRC_FILE &
 TOR_PID=$!
 
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
-    log "Waiting for Tor to start and generate the hidden service..."
-    for i in {1..60}; do  # Increased wait time to 60 seconds
-        if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
-            ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
-            log "Onion address generated: $ONION_ADDRESS"
-            # Update ZeroNet configuration
-            sed -i "s/^ip_external =.*/ip_external = $ONION_ADDRESS/" "$ZERONET_DIR/zeronet.conf"
-            break
-        fi
-        sleep 1
-    done
+   log "Waiting for Tor to start and generate the hidden service..."
+   for i in {1..60}; do  # Increased wait time to 60 seconds
+       if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
+           ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
+           log "Onion address generated: $ONION_ADDRESS"
+           break
+       fi
+       sleep 1
+   done
 
-    if [ -z "$ONION_ADDRESS" ]; then
-        log_error "Failed to retrieve onion address. Check Tor logs for issues."
-        exit 1
-    fi
+   if [ -z "$ONION_ADDRESS" ]; then
+       log_error "Failed to retrieve onion address. Check Tor logs for issues."
+       exit 1
+   fi
 else
-    log "Skipping onion address generation as onion tracker setup was not requested"
+   log "Skipping onion address generation as onion tracker setup was not requested"
 fi
 
 if kill -0 $TOR_PID 2>/dev/null; then
-    log "Tor process is still running. Proceeding with setup."
+   log "Tor process is still running. Proceeding with setup."
 else
-    log_error "Tor process is not running. There may have been an issue starting Tor."
-    exit 1
+   log_error "Tor process is not running. There may have been an issue starting Tor."
+   exit 1
 fi
 
 TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
-    # Check if Termux:Boot directory exists, create if it doesn't
-    if [ ! -d "$TERMUX_BOOT_DIR" ]; then
-        log "Termux:Boot directory not found. Creating it..."
-        mkdir -p "$TERMUX_BOOT_DIR"
-        if [ $? -ne 0 ]; then
-            log_error "Failed to create Termux:Boot directory. Make sure Termux:Boot is installed."
-            log "Skipping boot script creation."
-        else
-            log "Termux:Boot directory created successfully."
-        fi
-    fi
+   # Check if Termux:Boot directory exists, create if it doesn't
+   if [ ! -d "$TERMUX_BOOT_DIR" ]; then
+       log "Termux:Boot directory not found. Creating it..."
+       mkdir -p "$TERMUX_BOOT_DIR"
+       if [ $? -ne 0 ]; then
+           log_error "Failed to create Termux:Boot directory. Make sure Termux:Boot is installed."
+           log "Skipping boot script creation."
+       else
+           log "Termux:Boot directory created successfully."
+       fi
+   fi
 
-    # Only create the boot script if the directory exists
-    if [ -d "$TERMUX_BOOT_DIR" ]; then
-        cat > "$BOOT_SCRIPT" << EOL
+   # Only create the boot script if the directory exists
+   if [ -d "$TERMUX_BOOT_DIR" ]; then
+       cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
@@ -469,101 +385,99 @@ export PATH=$PATH:/data/data/com.termux/files/usr/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
-    tor -f "/data/data/com.termux/files/home/.tor/torrc" &
-    # Wait until Tor is ready
-    for i in {1..30}; do
-        if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
-            break
-        fi
-        sleep 1
-    done
+   tor -f "/data/data/com.termux/files/home/.tor/torrc" &
+   # Wait until Tor is ready
+   for i in {1..30}; do
+       if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
+           break
+       fi
+       sleep 1
+   done
 }
 
 start_zeronet() {
-    cd "/data/data/com.termux/files/home/apps/zeronet"
-    . ./venv/bin/activate
-    python zeronet.py &
+   cd "/data/data/com.termux/files/home/apps/zeronet"
+   . ./venv/bin/activate
+   python zeronet.py &
 
-    ZERONET_PID=$!
-    echo "ZeroNet started"
-    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started" --ongoing
-    termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://$UI_IP:$UI_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'"
+   ZERONET_PID=$!
+   echo "ZeroNet started"
+   termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started" --ongoing
+   termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:43110" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110'"
 }
 
 start_tor
 start_zeronet
 EOL
 
-        chmod +x "$BOOT_SCRIPT"
-        log "Termux Boot script created at $BOOT_SCRIPT"
-    else
-        log "Termux:Boot directory not found. Boot script creation skipped."
-    fi
+       chmod +x "$BOOT_SCRIPT"
+       log "Termux Boot script created at $BOOT_SCRIPT"
+   else
+       log "Termux:Boot directory not found. Boot script creation skipped."
+   fi
 else
-    log "Boot script setup skipped. To set up auto-start later, ensure Termux:Boot is installed and run this script again."
+   log "Boot script setup skipped. To set up auto-start later, ensure Termux:Boot is installed and run this script again."
 fi
 
 check_openssl() {
-    if command -v openssl; then
-        log "OpenSSL is available. Version: $(openssl version)"
-    else
-        log_error "OpenSSL is not found in PATH. Please ensure it's installed."
-        exit 1
-    fi
+   if command -v openssl; then
+       log "OpenSSL is available. Version: $(openssl version)"
+   else
+       log_error "OpenSSL is not found in PATH. Please ensure it's installed."
+       exit 1
+   fi
 }
 
 start_zeronet() {
-    cd $ZERONET_DIR
-    source ./venv/bin/activate
+   cd $ZERONET_DIR
+   source ./venv/bin/activate
 
-    # Add Termux bin to PATH
-    export PATH=$PATH:$PREFIX/bin
+   # Add Termux bin to PATH
+   export PATH=$PATH:$PREFIX/bin
 
-    # Check for existing ZeroNet processes
-    if pgrep -f "python.*zeronet.py" > /dev/null; then
-        log "Existing ZeroNet process found. Terminating..."
-        pkill -f "python.*zeronet.py"
-        sleep 5  # Wait for the process to terminate
-    fi
+   # Check for existing ZeroNet processes
+   if pgrep -f "python.*zeronet.py" > /dev/null; then
+       log "Existing ZeroNet process found. Terminating..."
+       pkill -f "python.*zeronet.py"
+       sleep 5  # Wait for the process to terminate
+   fi
 
-    # Remove lock file if it exists
-    LOCK_FILE="$ZERONET_DIR/data/lock.pid"
-    if [ -f "$LOCK_FILE" ]; then
-        log "Removing stale lock file..."
-        rm "$LOCK_FILE"
-    fi
+   # Remove lock file if it exists
+   LOCK_FILE="$ZERONET_DIR/data/lock.pid"
+   if [ -f "$LOCK_FILE" ]; then
+       log "Removing stale lock file..."
+       rm "$LOCK_FILE"
+   fi
 
-    if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
-        if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
-            mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
-            log "Renamed disabled-Bootstrapper to Bootstrapper"
-        else
-            log "disabled-Bootstrapper directory not found"
-        fi
-    else
-        log "Skipping renaming of disabled-Bootstrapper folder"
-    fi
+   if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
+       if [ -d "$ZERONET_DIR/plugins/disabled-Bootstrapper" ]; then
+           mv "$ZERONET_DIR/plugins/disabled-Bootstrapper" "$ZERONET_DIR/plugins/Bootstrapper"
+           log "Renamed disabled-Bootstrapper to Bootstrapper"
+       else
+           log "disabled-Bootstrapper directory not found"
+       fi
+   else
+       log "Skipping renaming of disabled-Bootstrapper folder"
+   fi
 
-    # Add a small delay before starting ZeroNet
-    sleep 2
+   # Add a small delay before starting ZeroNet
+   sleep 2
 
-    # Start ZeroNet with the updated PATH and debug output
-    python$PYTHON_MAJOR_VERSION zeronet.py > zeronet_debug.log 2>&1 &
-    ZERONET_PID=$!
-    log "ZeroNet started with PID $ZERONET_PID"
-    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
-    termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://$UI_IP:$UI_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT'"
+   # Start ZeroNet with the updated PATH and debug output
+   python$PYTHON_MAJOR_VERSION zeronet.py > zeronet_debug.log 2>&1 &
+   ZERONET_PID=$!
+   log "ZeroNet started with PID $ZERONET_PID"
+   termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
+   termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:43110" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110'"
 
-    # Wait a moment to check if the process is still running
-    sleep 5
-    if ! ps -p $ZERONET_PID > /dev/null; then
-        log_error "ZeroNet process terminated unexpectedly. Check logs for details."
-        cat zeronet_debug.log
-        exit 1
-    fi
+   # Wait a moment to check if the process is still running
+   sleep 5
+   if ! ps -p $ZERONET_PID > /dev/null; then
+       log_error "ZeroNet process terminated unexpectedly. Check logs for details."
+       cat zeronet_debug.log
+       exit 1
+   fi
 }
-
-# Download and unpack the GeoLite2 City database after the first ZeroNet shutdown and before the next run
 
 log "Downloading GeoLite2 City database..."
 
@@ -571,24 +485,23 @@ GEOIP_DB_URL="https://raw.githubusercontent.com/aemr3/GeoLite2-Database/master/G
 GEOIP_DB_PATH="$ZERONET_DIR/data/GeoLite2-City.mmdb"
 
 download_geoip_database() {
-    while true; do
-        log "Attempting to download GeoLite2 City database..."
-        if curl -A "$USER_AGENT" \
-            -H "Accept: application/octet-stream" \
-            -s -f -L "$GEOIP_DB_URL" -o "${GEOIP_DB_PATH}.gz"; then
-            log "Successfully downloaded GeoLite2 City database."
-            gunzip -f "${GEOIP_DB_PATH}.gz"
-            chmod 644 "$GEOIP_DB_PATH"
-            log "GeoLite2 City database unpacked and ready at $GEOIP_DB_PATH"
-            break
-        else
-            log "Failed to download GeoLite2 City database. Retrying in 5 seconds..."
-            sleep 5
-        fi
-    done
+   while true; do
+       log "Attempting to download GeoLite2 City database..."
+       if curl -A "$USER_AGENT" \
+           -H "Accept: application/octet-stream" \
+           -s -f -L "$GEOIP_DB_URL" -o "${GEOIP_DB_PATH}.gz"; then
+           log "Successfully downloaded GeoLite2 City database."
+           gunzip -f "${GEOIP_DB_PATH}.gz"
+           chmod 644 "$GEOIP_DB_PATH"
+           log "GeoLite2 City database unpacked and ready at $GEOIP_DB_PATH"
+           break
+       else
+           log "Failed to download GeoLite2 City database. Retrying in 5 seconds..."
+           sleep 5
+       fi
+   done
 }
 
-# Call the function to download and unpack the GeoLite2 City database
 download_geoip_database
 
 check_openssl
@@ -600,55 +513,53 @@ log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
 
 download_syncronite() {
-    log "Downloading Syncronite content..."
-    ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=$SYNCRONITE_ADDRESS"
-    ZIP_DIR="$ZERONET_DIR/data/$SYNCRONITE_ADDRESS"
+   log "Downloading Syncronite content..."
+   ZIP_URL="https://0net-preview.com/ZeroNet-Internal/Zip?address=$SYNCRONITE_ADDRESS"
+   ZIP_DIR="$ZERONET_DIR/data/$SYNCRONITE_ADDRESS"
 
-    mkdir -p "$ZIP_DIR"
-    while true; do
-        if curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"; then
-            unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
-            rm "$ZIP_DIR/content.zip"
-            log "Syncronite content downloaded and extracted to $ZIP_DIR"
-            return 0
-        else
-            log "Failed to download Syncronite content. Retrying in 5 seconds..."
-            sleep 5
-        fi
-    done
+   mkdir -p "$ZIP_DIR"
+   while true; do
+       if curl -L "$ZIP_URL" -o "$ZIP_DIR/content.zip"; then
+           unzip -o "$ZIP_DIR/content.zip" -d "$ZIP_DIR"
+           rm "$ZIP_DIR/content.zip"
+           log "Syncronite content downloaded and extracted to $ZIP_DIR"
+           return 0
+       else
+           log "Failed to download Syncronite content. Retrying in 5 seconds..."
+           sleep 5
+       fi
+   done
 }
 
 provide_syncronite_instructions() {
-    local instructions="To add Syncronite to ZeroNet:
-1. Visit http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS
-2. ZeroNet will add Syncronite to your dashboard so you'll receive trackers list updates as they come.
+   local instructions="To add Syncronite to ZeroNet:
+1. Visit http://127.0.0.1:43110/$SYNCRONITE_ADDRESS
+2. ZeroNet will add Syncronite to your dashboard.
 Note: Only open links to ZeroNet sites that you trust."
-    
-    log_and_show "To add Syncronite to your ZeroNet:"
-    log_and_show "1. Open this link in your web browser: http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS"
-    log_and_show "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
-    log_and_show "Note: Only open links to ZeroNet sites that you trust."
-    
-    termux-notification --id "syncronite_url" --title "Syncronite URL" --content "http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS" --button1 "Copy" --button1-action "termux-clipboard-set 'http://$UI_IP:$UI_PORT/$SYNCRONITE_ADDRESS'"
-    
-    termux-notification --id "syncronite_instructions" --title "Syncronite Instructions" --content "$instructions"
+   
+   log_and_show "To add Syncronite to your ZeroNet:"
+   log_and_show "1. Open this link in your web browser: http://127.0.0.1:43110/$SYNCRONITE_ADDRESS"
+   log_and_show "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
+   log_and_show "Note: Only open links to ZeroNet sites that you trust."
+   
+   termux-notification --id "syncronite_url" --title "Syncronite URL" --content "http://127.0.0.1:43110/$SYNCRONITE_ADDRESS" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110/$SYNCRONITE_ADDRESS'"
+   
+   termux-notification --id "syncronite_instructions" --title "Syncronite Instructions" --content "$instructions"
 }
 
 if download_syncronite; then
-    log "Syncronite content is now available in your ZeroNet data directory."
+   log "Syncronite content is now available in your ZeroNet data directory."
 else
-    log_error "Failed to prepare Syncronite content. You may need to add it manually later."
+   log_error "Failed to prepare Syncronite content. You may need to add it manually later."
 fi
-
-update_trackers
 
 log_and_show "ZeroNet setup complete."
 
 # Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
-    log_error "Failed to start ZeroNet"
-    termux-notification --id "zeronet_error" --title "ZeroNet Error" --content "Failed to start ZeroNet"
-    exit 1
+   log_error "Failed to start ZeroNet"
+   termux-notification --id "zeronet_error" --title "ZeroNet Error" --content "Failed to start ZeroNet"
+   exit 1
 fi
 
 log_and_show "ZeroNet is running successfully. Syncronite content is available."
@@ -657,7 +568,7 @@ log_and_show "ZeroNet is running successfully. Syncronite content is available."
 rm -rf "$WORK_DIR"
 
 log_and_show "ZeroNet installation completed successfully!"
-log_and_show "You can now access ZeroNet at http://$UI_IP:$UI_PORT"
+log_and_show "You can now access ZeroNet at http://127.0.0.1:43110"
 
 log "Installation process completed. Please review the log file at $LOG_FILE for details."
 
