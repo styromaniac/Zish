@@ -19,6 +19,7 @@ TOR_PROXY_PORT=49050
 TOR_CONTROL_PORT=49051
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+FILESERVER_PORT=43110
 
 # Create a temporary directory in the user's home folder
 WORK_DIR="$HOME/zeronet_tmp"
@@ -271,32 +272,6 @@ fi
 
 mkdir -p $PREFIX/var/log/
 
-generate_random_port() {
-   log "Generating a random, collision-free port number for ZeroNet..."
-
-   EXCLUDED_PORTS=($TOR_PROXY_PORT $TOR_CONTROL_PORT)
-
-   while true; do
-       RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
-       
-       # Check if the port is in the excluded list
-       if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
-           log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
-           continue
-       fi
-       
-       # Check if the port is already in use
-       if ! ss -tuln | grep -q ":$RANDOM_PORT "; then
-           log "Selected available port $RANDOM_PORT for ZeroNet."
-           FILESERVER_PORT=$RANDOM_PORT
-           log "Assigned FILESERVER_PORT = $FILESERVER_PORT"
-           break
-       else
-           log "Port $RANDOM_PORT is in use. Generating a new port..."
-       fi
-   done
-}
-
 configure_tor() {
    log "Configuring Tor..."
    mkdir -p $HOME/.tor
@@ -326,7 +301,6 @@ EOL
    log "Tor configuration created at $TORRC_FILE"
 }
 
-generate_random_port
 configure_tor
 
 log "Starting Tor service..."
@@ -477,6 +451,47 @@ start_zeronet() {
        cat zeronet_debug.log
        exit 1
    fi
+
+   # Wait for ZeroNet to initialize (adjust time as needed)
+   sleep 30
+
+   # Kill ZeroNet to update configuration
+   if ps -p $ZERONET_PID > /dev/null; then
+       kill $ZERONET_PID
+       sleep 5
+   fi
+
+   # Update ZeroNet configuration after first run
+   update_zeronet_conf
+}
+
+update_zeronet_conf() {
+    log "Updating ZeroNet configuration..."
+    local conf_file="$ZERONET_DIR/zeronet.conf"
+
+    # Create or update the configuration file
+    cat > "$conf_file" << EOL
+[global]
+homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
+data_dir = $ZERONET_DIR/data
+log_dir = $PREFIX/var/log/zeronet
+ui_ip = 127.0.0.1
+ui_port = $FILESERVER_PORT
+tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
+tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
+trackers_file = $ZERONET_DIR/trackers.txt
+language = en
+tor = enable
+fileserver_port = $FILESERVER_PORT
+EOL
+
+    if [[ $onion_tracker_setup =~ ^[Yy]$ ]] && [ -n "$ONION_ADDRESS" ]; then
+        echo "ip_external = $ONION_ADDRESS" >> "$conf_file"
+    else
+        echo "ip_external = " >> "$conf_file"
+    fi
+
+    log "ZeroNet configuration updated at $conf_file"
 }
 
 log "Downloading GeoLite2 City database..."
@@ -509,6 +524,9 @@ check_openssl
 log "Starting ZeroNet..."
 start_zeronet
 
+log "Restarting ZeroNet with updated configuration..."
+start_zeronet
+
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
 
@@ -533,16 +551,16 @@ download_syncronite() {
 
 provide_syncronite_instructions() {
    local instructions="To add Syncronite to ZeroNet:
-1. Visit http://127.0.0.1:43110/$SYNCRONITE_ADDRESS
+1. Visit http://127.0.0.1:$FILESERVER_PORT/$SYNCRONITE_ADDRESS
 2. ZeroNet will add Syncronite to your dashboard.
 Note: Only open links to ZeroNet sites that you trust."
    
    log_and_show "To add Syncronite to your ZeroNet:"
-   log_and_show "1. Open this link in your web browser: http://127.0.0.1:43110/$SYNCRONITE_ADDRESS"
+   log_and_show "1. Open this link in your web browser: http://127.0.0.1:$FILESERVER_PORT/$SYNCRONITE_ADDRESS"
    log_and_show "2. ZeroNet will automatically add Syncronite to your dashboard when you visit the link."
    log_and_show "Note: Only open links to ZeroNet sites that you trust."
    
-   termux-notification --id "syncronite_url" --title "Syncronite URL" --content "http://127.0.0.1:43110/$SYNCRONITE_ADDRESS" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110/$SYNCRONITE_ADDRESS'"
+   termux-notification --id "syncronite_url" --title "Syncronite URL" --content "http://127.0.0.1:$FILESERVER_PORT/$SYNCRONITE_ADDRESS" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:$FILESERVER_PORT/$SYNCRONITE_ADDRESS'"
    
    termux-notification --id "syncronite_instructions" --title "Syncronite Instructions" --content "$instructions"
 }
@@ -568,7 +586,7 @@ log_and_show "ZeroNet is running successfully. Syncronite content is available."
 rm -rf "$WORK_DIR"
 
 log_and_show "ZeroNet installation completed successfully!"
-log_and_show "You can now access ZeroNet at http://127.0.0.1:43110"
+log_and_show "You can now access ZeroNet at http://127.0.0.1:$FILESERVER_PORT"
 
 log "Installation process completed. Please review the log file at $LOG_FILE for details."
 
