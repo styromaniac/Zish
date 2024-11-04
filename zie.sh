@@ -27,22 +27,22 @@ mkdir -p "$WORK_DIR"
 chmod -R 755 "$WORK_DIR"
 
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+   echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
 log_and_show() {
-    log "$1"
-    echo "$1"
+   log "$1"
+   echo "$1"
 }
 
 log_error() {
-    log "[ERROR] $1"
-    echo "Error: $1" >&2
-    exit 1
+   log "[ERROR] $1"
+   echo "Error: $1" >&2
+   exit 1
 }
 
 get_python_version() {
-    python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+   python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
 }
 
 PYTHON_VERSION=$(get_python_version)
@@ -66,24 +66,24 @@ echo "ZeroNet installation: Step 4 of 4 - Installing ZeroNet"
 echo "This may take several minutes. Please be patient. If you have Termux:API installed, you'll receive notifications with further instructions when ZeroNet is installed and running."
 
 update_mirrors() {
-    local max_attempts=5
-    local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if yes | pkg update; then
-            log "Successfully updated package lists"
-            return 0
-        else
-            log "Failed to update package lists. Attempt $attempt of $max_attempts."
-            if [ $attempt -lt $max_attempts ]; then
-                log "Trying a different mirror..."
-                termux-change-repo
-                sleep 5
-            fi
-            ((attempt++))
-        fi
-    done
-    log_error "Failed to update package lists after $max_attempts attempts."
-    return 1
+   local max_attempts=5
+   local attempt=1
+   while [ $attempt -le $max_attempts ]; do
+       if yes | pkg update; then
+           log "Successfully updated package lists"
+           return 0
+       else
+           log "Failed to update package lists. Attempt $attempt of $max_attempts."
+           if [ $attempt -lt $max_attempts ]; then
+               log "Trying a different mirror..."
+               termux-change-repo
+               sleep 5
+           fi
+           ((attempt++))
+       fi
+   done
+   log_error "Failed to update package lists after $max_attempts attempts."
+   return 1
 }
 
 update_mirrors || exit 1
@@ -91,54 +91,54 @@ update_mirrors || exit 1
 yes | pkg upgrade
 
 required_packages=(
-    termux-tools termux-keyring python
-    netcat-openbsd binutils git cmake libffi
-    curl unzip libtool automake autoconf pkg-config findutils
-    clang make termux-api tor perl jq openssl-tool iproute2
-    zlib
+   termux-tools termux-keyring python
+   netcat-openbsd binutils git cmake libffi
+   curl unzip libtool automake autoconf pkg-config findutils
+   clang make termux-api tor perl jq openssl-tool iproute2
+   zlib
 )
 
 install_package() {
-    local package=$1
-    local max_attempts=3
-    local attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if yes | pkg install -y "$package"; then
-            log "Successfully installed $package"
-            return 0
-        else
-            log "Failed to install $package. Attempt $attempt of $max_attempts."
-            if [ $attempt -lt $max_attempts ]; then
-                log "Retrying in 5 seconds..."
-                sleep 5
-            fi
-            ((attempt++))
-        fi
-    done
-    log_error "Failed to install $package after $max_attempts attempts."
-    return 1
+   local package=$1
+   local max_attempts=3
+   local attempt=1
+   while [ $attempt -le $max_attempts ]; do
+       if yes | pkg install -y "$package"; then
+           log "Successfully installed $package"
+           return 0
+       else
+           log "Failed to install $package. Attempt $attempt of $max_attempts."
+           if [ $attempt -lt $max_attempts ]; then
+               log "Retrying in 5 seconds..."
+               sleep 5
+           fi
+           ((attempt++))
+       fi
+   done
+   log_error "Failed to install $package after $max_attempts attempts."
+   return 1
 }
 
 for package in "${required_packages[@]}"; do
-    if ! dpkg -s "$package" 2>&1; then
-        install_package "$package" || exit 1
-    fi
+   if ! dpkg -s "$package" 2>&1; then
+       install_package "$package" || exit 1
+   fi
 done
 
 install_python_packages() {
-    log "Installing required Python packages..."
-    
-    # Ensure Python is up to date
-    pkg upgrade python
+   log "Installing required Python packages..."
+   
+   # Ensure Python is up to date
+   pkg upgrade python
 
-    export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python$PYTHON_VERSION"
-    export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib/python$PYTHON_VERSION/config-$PYTHON_VERSION"
-    export PYTHONPATH="$PREFIX/lib/python$PYTHON_VERSION/site-packages"
+   export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python$PYTHON_VERSION"
+   export LDFLAGS="-L$PREFIX/lib -L$PREFIX/lib/python$PYTHON_VERSION/config-$PYTHON_VERSION"
+   export PYTHONPATH="$PREFIX/lib/python$PYTHON_VERSION/site-packages"
 
-    pip$PYTHON_MAJOR_VERSION install --upgrade pip setuptools wheel
+   pip$PYTHON_MAJOR_VERSION install --upgrade pip setuptools wheel
 
-    # Create our own requirements.txt file
-    cat > "$WORK_DIR/custom_requirements.txt" << EOL
+   # Create our own requirements.txt file
+   cat > "$WORK_DIR/custom_requirements.txt" << EOL
 setuptools
 greenlet
 cffi
@@ -161,33 +161,33 @@ pyaes
 ipython
 EOL
 
-    log "Installing Python packages individually..."
-    while read -r package; do
-        if pip$PYTHON_MAJOR_VERSION install "$package"; then
-            log "Successfully installed $package"
-        else
-            log_error "Failed to install $package"
-            return 1
-        fi
-    done < "$WORK_DIR/custom_requirements.txt"
+   log "Installing Python packages individually..."
+   while read -r package; do
+       if pip$PYTHON_MAJOR_VERSION install "$package"; then
+           log "Successfully installed $package"
+       else
+           log_error "Failed to install $package"
+           return 1
+       fi
+   done < "$WORK_DIR/custom_requirements.txt"
 
-    if [ $? -eq 0 ]; then
-        log "Successfully installed all required Python packages"
-    else
-        log_error "Failed to install some Python packages from custom_requirements.txt"
-        return 1
-    fi
+   if [ $? -eq 0 ]; then
+       log "Successfully installed all required Python packages"
+   else
+       log_error "Failed to install some Python packages from custom_requirements.txt"
+       return 1
+   fi
 
-    # Verify installations
-    log "Verifying installations..."
-    python$PYTHON_MAJOR_VERSION -c "import gevent; from Crypto.Hash import SHA3_256; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
+   # Verify installations
+   log "Verifying installations..."
+   python$PYTHON_MAJOR_VERSION -c "import gevent; from Crypto.Hash import SHA3_256; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
-    log "The directory $ZERONET_DIR already exists and is not empty."
-    log "Proceeding to adjust permissions and clean the directory."
-    chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
-    rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
+   log "The directory $ZERONET_DIR already exists and is not empty."
+   log "Proceeding to adjust permissions and clean the directory."
+   chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
+   rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
 fi
 
 mkdir -p "$ZERONET_DIR"
@@ -195,21 +195,21 @@ mkdir -p "$ZERONET_DIR"
 cd "$WORK_DIR" || { log_error "Failed to change to working directory"; exit 1; }
 
 git_clone_with_retries() {
-    local repo_url=$1
-    local target_dir=$2
-    local branch=$3
+   local repo_url=$1
+   local target_dir=$2
+   local branch=$3
 
-    while true; do
-        log "Attempting to clone $repo_url..."
-        if git clone --depth 1 --branch "$branch" "$repo_url" "$target_dir"; then
-            log "Successfully cloned $repo_url"
-            break
-        else
-            log "Failed to clone $repo_url. Retrying in 5 seconds..."
-            rm -rf "$target_dir"
-            sleep 5
-        fi
-    done
+   while true; do
+       log "Attempting to clone $repo_url..."
+       if git clone --depth 1 --branch "$branch" "$repo_url" "$target_dir"; then
+           log "Successfully cloned $repo_url"
+           break
+       else
+           log "Failed to clone $repo_url. Retrying in 5 seconds..."
+           rm -rf "$target_dir"
+           sleep 5
+       fi
+   done
 }
 
 zeronet_source="https://github.com/zeronet-conservancy/zeronet-conservancy.git"
@@ -219,36 +219,36 @@ cd "$ZERONET_DIR" || exit 1
 
 # Check for key files
 if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
-   log_error "zeronet.py not found. ZeroNet installation might be incomplete."
-   exit 1
+  log_error "zeronet.py not found. ZeroNet installation might be incomplete."
+  exit 1
 fi
 
 # Check if src directory exists
 if [ -d "$ZERONET_DIR/src" ]; then
-   sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
+  sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
 else
-   log "src directory not found. Checking alternative structure..."
-   if [ -f "$ZERONET_DIR/util/Git.py" ]; then
-       sed -i '1i import traceback' "$ZERONET_DIR/util/Git.py"
-   else
-       log_error "Unable to locate Git.py. ZeroNet structure might have changed."
-       exit 1
-   fi
+  log "src directory not found. Checking alternative structure..."
+  if [ -f "$ZERONET_DIR/util/Git.py" ]; then
+      sed -i '1i import traceback' "$ZERONET_DIR/util/Git.py"
+  else
+      log_error "Unable to locate Git.py. ZeroNet structure might have changed."
+      exit 1
+  fi
 fi
 
 if [ ! -d "$ZERONET_DIR/venv" ]; then
-   python$PYTHON_MAJOR_VERSION -m venv "$ZERONET_DIR/venv"
+  python$PYTHON_MAJOR_VERSION -m venv "$ZERONET_DIR/venv"
 fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
 # Check if requirements.txt exists
 if [ -f "$ZERONET_DIR/requirements.txt" ]; then
-   pip install -r "$ZERONET_DIR/requirements.txt"
+  pip install -r "$ZERONET_DIR/requirements.txt"
 else
-   log "requirements.txt not found. Installing packages from custom list..."
-   # Install packages from our custom list
-   install_python_packages
+  log "requirements.txt not found. Installing packages from custom list..."
+  # Install packages from our custom list
+  install_python_packages
 fi
 
 chmod -R u+rwX "$ZERONET_DIR"
@@ -257,77 +257,75 @@ mkdir -p ./data
 chmod -R u+rwX ./data
 
 if [[ "$users_json_source" == http* ]]; then
-   mkdir -p data
-   curl -L "$users_json_source" -o "data/users.json"
+  mkdir -p data
+  curl -L "$users_json_source" -o "data/users.json"
 elif [ -n "$users_json_source" ]; then
-   if [ -f "$users_json_source" ]; then
-       mkdir -p data
-       cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
-       log "users.json copied successfully from $users_json_source"
-   else
-       log_error "File not found: $users_json_source"
-       exit 1
-   fi
+  if [ -f "$users_json_source" ]; then
+      mkdir -p data
+      cp "$users_json_source" data/users.json || { log_error "Failed to copy users.json"; exit 1; }
+      log "users.json copied successfully from $users_json_source"
+  else
+      log_error "File not found: $users_json_source"
+      exit 1
+  fi
 fi
 
 mkdir -p $PREFIX/var/log/
 
 update_zeronet_conf() {
-    log "Updating ZeroNet configuration..."
-    local conf_file="$ZERONET_DIR/zeronet.conf"
+   log "Updating ZeroNet configuration..."
+   local conf_file="$ZERONET_DIR/zeronet.conf"
 
-    # Create or update the configuration file
-    cat > "$conf_file" << EOL
+   # Create or update the configuration file
+   cat > "$conf_file" << EOL
 [global]
-homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
 data_dir = $ZERONET_DIR/data
 log_dir = $PREFIX/var/log/zeronet
 ui_ip = 127.0.0.1
 ui_port = $FILESERVER_PORT
 tor_controller = $TOR_CONTROL_PORT
 tor_proxy = $TOR_PROXY_PORT
-trackers_file = $ZERONET_DIR/trackers.txt
 language = en
 tor = enable
 fileserver_port = $FILESERVER_PORT
 EOL
 
-    if [[ $onion_tracker_setup =~ ^[Yy]$ ]] && [ -n "$ONION_ADDRESS" ]; then
-        echo "ip_external = $ONION_ADDRESS" >> "$conf_file"
-    else
-        echo "ip_external = " >> "$conf_file"
-    fi
+   if [[ $onion_tracker_setup =~ ^[Yy]$ ]] && [ -n "$ONION_ADDRESS" ]; then
+       echo "ip_external = $ONION_ADDRESS" >> "$conf_file"
+   else
+       echo "ip_external = " >> "$conf_file"
+   fi
 
-    log "ZeroNet configuration updated at $conf_file"
+   log "ZeroNet configuration updated at $conf_file"
 }
 
 configure_tor() {
-   log "Configuring Tor..."
-   mkdir -p $HOME/.tor
-   mkdir -p $PREFIX/var/log/tor
+  log "Configuring Tor..."
+  mkdir -p $HOME/.tor
+  mkdir -p $PREFIX/var/log/tor
 
-   # Mandatory configuration
-   cat > $TORRC_FILE << EOL
+  # Mandatory configuration
+  cat > $TORRC_FILE << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
 CookieAuthentication 1
 Log notice file $PREFIX/var/log/tor/notices.log
 EOL
 
-   # Optional onion service configuration
-   if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
-       mkdir -p $HOME/.tor/ZeroNet
-       cat >> $TORRC_FILE << EOL
+  # Optional onion service configuration
+  if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
+      mkdir -p $HOME/.tor/ZeroNet
+      cat >> $TORRC_FILE << EOL
 HiddenServiceDir $HOME/.tor/ZeroNet
 HiddenServicePort 80 127.0.0.1:$FILESERVER_PORT
 HiddenServiceVersion 3
 EOL
-       log "Onion tracker configuration added to Tor configuration"
-   else
-       log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
-   fi
+      log "Onion tracker configuration added to Tor configuration"
+  else
+      log "Onion tracker setup skipped, but mandatory Tor configuration is in place"
+  fi
 
-   log "Tor configuration created at $TORRC_FILE"
+  log "Tor configuration created at $TORRC_FILE"
 }
 
 configure_tor
@@ -337,50 +335,50 @@ tor -f $TORRC_FILE &
 TOR_PID=$!
 
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
-   log "Waiting for Tor to start and generate the hidden service..."
-   for i in {1..60}; do  # Increased wait time to 60 seconds
-       if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
-           ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
-           log "Onion address generated: $ONION_ADDRESS"
-           break
-       fi
-       sleep 1
-   done
+  log "Waiting for Tor to start and generate the hidden service..."
+  for i in {1..60}; do  # Increased wait time to 60 seconds
+      if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
+          ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
+          log "Onion address generated: $ONION_ADDRESS"
+          break
+      fi
+      sleep 1
+  done
 
-   if [ -z "$ONION_ADDRESS" ]; then
-       log_error "Failed to retrieve onion address. Check Tor logs for issues."
-       exit 1
-   fi
+  if [ -z "$ONION_ADDRESS" ]; then
+      log_error "Failed to retrieve onion address. Check Tor logs for issues."
+      exit 1
+  fi
 else
-   log "Skipping onion address generation as onion tracker setup was not requested"
+  log "Skipping onion address generation as onion tracker setup was not requested"
 fi
 
 if kill -0 $TOR_PID 2>/dev/null; then
-   log "Tor process is still running. Proceeding with setup."
+  log "Tor process is still running. Proceeding with setup."
 else
-   log_error "Tor process is not running. There may have been an issue starting Tor."
-   exit 1
+  log_error "Tor process is not running. There may have been an issue starting Tor."
+  exit 1
 fi
 
 TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
-   # Check if Termux:Boot directory exists, create if it doesn't
-   if [ ! -d "$TERMUX_BOOT_DIR" ]; then
-       log "Termux:Boot directory not found. Creating it..."
-       mkdir -p "$TERMUX_BOOT_DIR"
-       if [ $? -ne 0 ]; then
-           log_error "Failed to create Termux:Boot directory. Make sure Termux:Boot is installed."
-           log "Skipping boot script creation."
-       else
-           log "Termux:Boot directory created successfully."
-       fi
-   fi
+  # Check if Termux:Boot directory exists, create if it doesn't
+  if [ ! -d "$TERMUX_BOOT_DIR" ]; then
+      log "Termux:Boot directory not found. Creating it..."
+      mkdir -p "$TERMUX_BOOT_DIR"
+      if [ $? -ne 0 ]; then
+          log_error "Failed to create Termux:Boot directory. Make sure Termux:Boot is installed."
+          log "Skipping boot script creation."
+      else
+          log "Termux:Boot directory created successfully."
+      fi
+  fi
 
-   # Only create the boot script if the directory exists
-   if [ -d "$TERMUX_BOOT_DIR" ]; then
-       cat > "$BOOT_SCRIPT" << EOL
+  # Only create the boot script if the directory exists
+  if [ -d "$TERMUX_BOOT_DIR" ]; then
+      cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
 termux-wake-lock
 
@@ -388,14 +386,14 @@ export PATH=$PATH:/data/data/com.termux/files/usr/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
-   tor -f "/data/data/com.termux/files/home/.tor/torrc" &
-   # Wait until Tor is ready
-   for i in {1..30}; do
-       if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
-           break
-       fi
-       sleep 1
-   done
+  tor -f "/data/data/com.termux/files/home/.tor/torrc" &
+  # Wait until Tor is ready
+  for i in {1..30}; do
+      if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
+          break
+      fi
+      sleep 1
+  done
 }
 
 start_zeronet() {
