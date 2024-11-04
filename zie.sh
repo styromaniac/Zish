@@ -20,7 +20,6 @@ TOR_CONTROL_PORT=49051
 SYNCRONITE_ADDRESS="15CEFKBRHFfAP9rmL6hhLmHoXrrgmw4B5o"
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
-# Create a temporary directory in the user's home folder
 WORK_DIR="$HOME/zeronet_tmp"
 mkdir -p "$WORK_DIR"
 chmod -R 755 "$WORK_DIR"
@@ -127,7 +126,6 @@ done
 install_python_packages() {
     log "Installing required Python packages..."
     
-    # Ensure Python is up to date
     pkg upgrade python
 
     export CFLAGS="-I$PREFIX/include -I$PREFIX/include/python$PYTHON_VERSION"
@@ -136,7 +134,6 @@ install_python_packages() {
 
     pip$PYTHON_MAJOR_VERSION install --upgrade pip setuptools wheel
 
-    # Create our own requirements.txt file
     cat > "$WORK_DIR/custom_requirements.txt" << EOL
 setuptools
 greenlet
@@ -170,21 +167,11 @@ EOL
         fi
     done < "$WORK_DIR/custom_requirements.txt"
 
-    if [ $? -eq 0 ]; then
-        log "Successfully installed all required Python packages"
-    else
-        log_error "Failed to install some Python packages from custom_requirements.txt"
-        return 1
-    fi
-
-    # Verify installations
-    log "Verifying installations..."
     python$PYTHON_MAJOR_VERSION -c "import gevent; from Crypto.Hash import SHA3_256; import OpenSSL; print('SHA3-256:', SHA3_256.new(b'test').hexdigest()); print('All required Python packages successfully installed')" || log_error "Failed to import one or more required Python packages"
 }
 
 if [ -d "$ZERONET_DIR" ] && [ "$(ls -A "$ZERONET_DIR")" ]; then
     log "The directory $ZERONET_DIR already exists and is not empty."
-    log "Proceeding to adjust permissions and clean the directory."
     chmod -R u+rwX "$ZERONET_DIR" || { log_error "Failed to adjust permissions on existing directory"; exit 1; }
     rm -rf "$ZERONET_DIR" || { log_error "Failed to remove existing directory"; exit 1; }
 fi
@@ -216,17 +203,14 @@ git_clone_with_retries "$zeronet_source" "$ZERONET_DIR" "optional-rich-master"
 
 cd "$ZERONET_DIR" || exit 1
 
-# Check for key files
 if [ ! -f "$ZERONET_DIR/zeronet.py" ]; then
    log_error "zeronet.py not found. ZeroNet installation might be incomplete."
    exit 1
 fi
 
-# Check if src directory exists
 if [ -d "$ZERONET_DIR/src" ]; then
    sed -i '1i import traceback' "$ZERONET_DIR/src/util/Git.py"
 else
-   log "src directory not found. Checking alternative structure..."
    if [ -f "$ZERONET_DIR/util/Git.py" ]; then
        sed -i '1i import traceback' "$ZERONET_DIR/util/Git.py"
    else
@@ -241,12 +225,9 @@ fi
 
 source "$ZERONET_DIR/venv/bin/activate"
 
-# Check if requirements.txt exists
 if [ -f "$ZERONET_DIR/requirements.txt" ]; then
    pip install -r "$ZERONET_DIR/requirements.txt"
 else
-   log "requirements.txt not found. Installing packages from custom list..."
-   # Install packages from our custom list
    install_python_packages
 fi
 
@@ -279,13 +260,11 @@ generate_random_port() {
    while true; do
        RANDOM_PORT=$(shuf -i 1025-65535 -n 1)
        
-       # Check if the port is in the excluded list
        if [[ " ${EXCLUDED_PORTS[@]} " =~ " $RANDOM_PORT " ]]; then
            log "Port $RANDOM_PORT is excluded (Tor port). Generating a new port..."
            continue
        fi
        
-       # Check if the port is already in use
        if ! ss -tuln | grep -q ":$RANDOM_PORT "; then
            log "Selected available port $RANDOM_PORT for ZeroNet."
            FILESERVER_PORT=$RANDOM_PORT
@@ -302,7 +281,6 @@ configure_tor() {
    mkdir -p $HOME/.tor
    mkdir -p $PREFIX/var/log/tor
 
-   # Mandatory configuration
    cat > $TORRC_FILE << EOL
 SocksPort $TOR_PROXY_PORT
 ControlPort $TOR_CONTROL_PORT
@@ -310,7 +288,6 @@ CookieAuthentication 1
 Log notice file $PREFIX/var/log/tor/notices.log
 EOL
 
-   # Optional onion service configuration
    if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
        mkdir -p $HOME/.tor/ZeroNet
        cat >> $TORRC_FILE << EOL
@@ -335,7 +312,7 @@ TOR_PID=$!
 
 if [[ $onion_tracker_setup =~ ^[Yy]$ ]]; then
    log "Waiting for Tor to start and generate the hidden service..."
-   for i in {1..60}; do  # Increased wait time to 60 seconds
+   for i in {1..60}; do
        if [ -f "$HOME/.tor/ZeroNet/hostname" ]; then
            ONION_ADDRESS=$(cat "$HOME/.tor/ZeroNet/hostname")
            log "Onion address generated: $ONION_ADDRESS"
@@ -363,7 +340,6 @@ TERMUX_BOOT_DIR="$HOME/.termux/boot"
 BOOT_SCRIPT="$TERMUX_BOOT_DIR/start-zeronet"
 
 if [[ $boot_setup =~ ^[Yy]$ ]]; then
-   # Check if Termux:Boot directory exists, create if it doesn't
    if [ ! -d "$TERMUX_BOOT_DIR" ]; then
        log "Termux:Boot directory not found. Creating it..."
        mkdir -p "$TERMUX_BOOT_DIR"
@@ -375,7 +351,6 @@ if [[ $boot_setup =~ ^[Yy]$ ]]; then
        fi
    fi
 
-   # Only create the boot script if the directory exists
    if [ -d "$TERMUX_BOOT_DIR" ]; then
        cat > "$BOOT_SCRIPT" << EOL
 #!/data/data/com.termux/files/usr/bin/bash
@@ -386,7 +361,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/data/data/com.termux/files/usr/lib
 
 start_tor() {
    tor -f "/data/data/com.termux/files/home/.tor/torrc" &
-   # Wait until Tor is ready
    for i in {1..30}; do
        if [ -f "/data/data/com.termux/files/home/.tor/ZeroNet/hostname" ]; then
            break
@@ -432,17 +406,14 @@ start_zeronet() {
    cd $ZERONET_DIR
    source ./venv/bin/activate
 
-   # Add Termux bin to PATH
    export PATH=$PATH:$PREFIX/bin
 
-   # Check for existing ZeroNet processes
    if pgrep -f "python.*zeronet.py" > /dev/null; then
        log "Existing ZeroNet process found. Terminating..."
        pkill -f "python.*zeronet.py"
-       sleep 5  # Wait for the process to terminate
+       sleep 5
    fi
 
-   # Remove lock file if it exists
    LOCK_FILE="$ZERONET_DIR/data/lock.pid"
    if [ -f "$LOCK_FILE" ]; then
        log "Removing stale lock file..."
@@ -460,17 +431,14 @@ start_zeronet() {
        log "Skipping renaming of disabled-Bootstrapper folder"
    fi
 
-   # Add a small delay before starting ZeroNet
    sleep 2
 
-   # Start ZeroNet with the updated PATH and debug output
    python$PYTHON_MAJOR_VERSION zeronet.py > zeronet_debug.log 2>&1 &
    ZERONET_PID=$!
    log "ZeroNet started with PID $ZERONET_PID"
    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
    termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:43110" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110'"
 
-   # Wait a moment to check if the process is still running
    sleep 5
    if ! ps -p $ZERONET_PID > /dev/null; then
        log_error "ZeroNet process terminated unexpectedly. Check logs for details."
@@ -555,7 +523,6 @@ fi
 
 log_and_show "ZeroNet setup complete."
 
-# Adjusted the process check using pgrep
 if ! pgrep -f "zeronet.py" > /dev/null; then
    log_error "Failed to start ZeroNet"
    termux-notification --id "zeronet_error" --title "ZeroNet Error" --content "Failed to start ZeroNet"
@@ -564,7 +531,6 @@ fi
 
 log_and_show "ZeroNet is running successfully. Syncronite content is available."
 
-# Clean up
 rm -rf "$WORK_DIR"
 
 log_and_show "ZeroNet installation completed successfully!"
@@ -572,8 +538,6 @@ log_and_show "You can now access ZeroNet at http://127.0.0.1:43110"
 
 log "Installation process completed. Please review the log file at $LOG_FILE for details."
 
-# Provide instructions for adding Syncronite
 provide_syncronite_instructions
 
-# Final message
 log_and_show "Thank you for installing ZeroNet. Enjoy your decentralized web experience!"
