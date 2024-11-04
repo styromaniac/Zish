@@ -377,7 +377,7 @@ start_zeronet() {
    ZERONET_PID=$!
    echo "ZeroNet started"
    termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started" --ongoing
-   termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:43110" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110'"
+   termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:$FILESERVER_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:$FILESERVER_PORT'"
 }
 
 start_tor
@@ -400,6 +400,35 @@ check_openssl() {
        log_error "OpenSSL is not found in PATH. Please ensure it's installed."
        exit 1
    fi
+}
+
+update_zeronet_conf() {
+    log "Updating ZeroNet configuration..."
+    local conf_file="$ZERONET_DIR/zeronet.conf"
+
+    # Create or update the configuration file
+    cat > "$conf_file" << EOL
+[global]
+homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
+data_dir = $ZERONET_DIR/data
+log_dir = $PREFIX/var/log/zeronet
+ui_ip = 127.0.0.1
+ui_port = $FILESERVER_PORT
+tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
+tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
+trackers_file = $ZERONET_DIR/trackers.txt
+language = en
+tor = enable
+fileserver_port = $FILESERVER_PORT
+EOL
+
+    if [[ $onion_tracker_setup =~ ^[Yy]$ ]] && [ -n "$ONION_ADDRESS" ]; then
+        echo "ip_external = $ONION_ADDRESS" >> "$conf_file"
+    else
+        echo "ip_external = " >> "$conf_file"
+    fi
+
+    log "ZeroNet configuration updated at $conf_file"
 }
 
 start_zeronet() {
@@ -441,8 +470,6 @@ start_zeronet() {
    python$PYTHON_MAJOR_VERSION zeronet.py > zeronet_debug.log 2>&1 &
    ZERONET_PID=$!
    log "ZeroNet started with PID $ZERONET_PID"
-   termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with PID $ZERONET_PID" --ongoing
-   termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:43110" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:43110'"
 
    # Wait a moment to check if the process is still running
    sleep 5
@@ -455,43 +482,28 @@ start_zeronet() {
    # Wait for ZeroNet to initialize (adjust time as needed)
    sleep 30
 
-   # Kill ZeroNet to update configuration
+   # Gracefully shutdown ZeroNet
+   log "Shutting down ZeroNet gracefully..."
    if ps -p $ZERONET_PID > /dev/null; then
-       kill $ZERONET_PID
-       sleep 5
+       kill -SIGTERM $ZERONET_PID
+       
+       # Wait for process to terminate gracefully
+       local timeout=30
+       local counter=0
+       while ps -p $ZERONET_PID > /dev/null && [ $counter -lt $timeout ]; do
+           sleep 1
+           ((counter++))
+       done
+
+       # Force kill if still running after timeout
+       if ps -p $ZERONET_PID > /dev/null; then
+           log "Force killing ZeroNet after graceful shutdown timeout..."
+           kill -9 $ZERONET_PID
+           sleep 2
+       fi
    fi
 
-   # Update ZeroNet configuration after first run
-   update_zeronet_conf
-}
-
-update_zeronet_conf() {
-    log "Updating ZeroNet configuration..."
-    local conf_file="$ZERONET_DIR/zeronet.conf"
-
-    # Create or update the configuration file
-    cat > "$conf_file" << EOL
-[global]
-homepage = 191CazMVNaAcT9Y1zhkxd9ixMBPs59g2um
-data_dir = $ZERONET_DIR/data
-log_dir = $PREFIX/var/log/zeronet
-ui_ip = 127.0.0.1
-ui_port = $FILESERVER_PORT
-tor_controller = 127.0.0.1:$TOR_CONTROL_PORT
-tor_proxy = 127.0.0.1:$TOR_PROXY_PORT
-trackers_file = $ZERONET_DIR/trackers.txt
-language = en
-tor = enable
-fileserver_port = $FILESERVER_PORT
-EOL
-
-    if [[ $onion_tracker_setup =~ ^[Yy]$ ]] && [ -n "$ONION_ADDRESS" ]; then
-        echo "ip_external = $ONION_ADDRESS" >> "$conf_file"
-    else
-        echo "ip_external = " >> "$conf_file"
-    fi
-
-    log "ZeroNet configuration updated at $conf_file"
+   log "ZeroNet shutdown completed"
 }
 
 log "Downloading GeoLite2 City database..."
@@ -521,11 +533,22 @@ download_geoip_database
 
 check_openssl
 
-log "Starting ZeroNet..."
+# Initial run to generate files and initialize
+log "Initial ZeroNet startup..."
 start_zeronet
 
-log "Restarting ZeroNet with updated configuration..."
+# Update configuration after first run
+update_zeronet_conf
+
+# Start ZeroNet with new configuration
+log "Starting ZeroNet with updated configuration..."
 start_zeronet
+
+# Start final instance and set up notifications
+log "Starting final ZeroNet instance..."
+start_zeronet
+termux-notification --id "zeronet_status" --title "ZeroNet Running" --content "ZeroNet started with new configuration" --ongoing
+termux-notification --id "zeronet_url" --title "ZeroNet URL" --content "http://127.0.0.1:$FILESERVER_PORT" --button1 "Copy" --button1-action "termux-clipboard-set 'http://127.0.0.1:$FILESERVER_PORT'"
 
 log "ZeroNet started. Waiting 10 seconds before further operations..."
 sleep 10
